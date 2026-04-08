@@ -1,0 +1,35 @@
+{
+  "name": "chinese-helper",
+  "version": "1.0.0",
+  "description": "语文学习辅助工具 - 面向小学3-6年级的课后语文自主练习系统",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "node server/index.js",
+    "start": "node server/index.js",
+    "client:dev": "cd client && npm run dev",
+    "client:build": "cd client && npm run build",
+    "db:init": "node server/db/init.js",
+    "deploy": "bash scripts/deploy.sh"
+  },
+  "keywords": [
+    "chinese",
+    "education",
+    "elementary-school",
+    "handwriting",
+    "recitation"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.8.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.3.2",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.1.1"
+  }
+}

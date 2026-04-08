@@ -1,0 +1,17 @@
+node_modules/
+.env
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+client/dist/
+client/node_modules/
+logs/
+*.log
+.DS_Store
+Thumbs.db
+backups/
+*.onnx
+models/vosk-model-*/
+data/uploads/
+data/audio/
