@@ -52,8 +52,16 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  const refreshUser = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    const me = await api.me();
+    setUser(me);
+    return me;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, loginAdmin, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, loginAdmin, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

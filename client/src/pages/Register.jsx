@@ -7,8 +7,6 @@ export default function Register() {
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [inviteCode, setInviteCode] = useState('');
-  const [grade, setGrade] = useState(3);
-  const [textbookVersion, setTextbookVersion] = useState('人教版');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
@@ -24,8 +22,6 @@ export default function Register() {
         password,
         displayName,
         inviteCode,
-        grade,
-        textbookVersion,
       });
       navigate('/student');
     } catch (err) {
@@ -47,6 +43,7 @@ export default function Register() {
         <div className="login-header">
           <h1>学生注册</h1>
           <p>使用管理员提供的邀请码创建账户</p>
+          <p className="register-hint">年级与教材可在登录后，在「默写」「背诵」等模块中自由选择。</p>
         </div>
         <form onSubmit={handleSubmit} className="login-form">
           {error && <div className="error-msg">{error}</div>}
@@ -94,26 +91,6 @@ export default function Register() {
               minLength={8}
               required
             />
-          </div>
-          <div className="form-row-register">
-            <div className="form-group">
-              <label htmlFor="reg-grade">年级</label>
-              <select id="reg-grade" value={grade} onChange={e => setGrade(Number(e.target.value))}>
-                <option value={3}>三年级</option>
-                <option value={4}>四年级</option>
-                <option value={5}>五年级</option>
-                <option value={6}>六年级</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label htmlFor="reg-textbook">教材版本</label>
-              <input
-                id="reg-textbook"
-                type="text"
-                value={textbookVersion}
-                onChange={e => setTextbookVersion(e.target.value)}
-              />
-            </div>
           </div>
           <button type="submit" className="btn-primary btn-full" disabled={loading}>
             {loading ? '注册中...' : '注册并登录'}

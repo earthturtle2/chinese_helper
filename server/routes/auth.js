@@ -58,7 +58,7 @@ module.exports = function authRoutes(db) {
   });
 
   router.post('/register', (req, res) => {
-    const { username, password, displayName, inviteCode, grade, textbookVersion } = req.body;
+    const { username, password, displayName, inviteCode } = req.body;
     if (!username || !password || !inviteCode) {
       return res.status(400).json({ error: '请填写用户名、密码和邀请码' });
     }
@@ -97,15 +97,11 @@ module.exports = function authRoutes(db) {
     if (adminExists || parentExists) return res.status(409).json({ error: '该用户名已被其他角色使用' });
 
     const hash = bcrypt.hashSync(password, 10);
-    const g = grade ?? 3;
-    if (g < 3 || g > 6) {
-      return res.status(400).json({ error: '年级必须在 3–6 之间' });
-    }
 
     const tx = db.transaction(() => {
       db.prepare(
         'INSERT INTO students (username, display_name, password_hash, grade, textbook_version) VALUES (?, ?, ?, ?, ?)'
-      ).run(username, displayName || username, hash, g, textbookVersion || '人教版');
+      ).run(username, displayName || username, hash, 3, '人教版');
       db.prepare('UPDATE invitation_codes SET used_count = used_count + 1 WHERE id = ?').run(row.id);
     });
     tx();

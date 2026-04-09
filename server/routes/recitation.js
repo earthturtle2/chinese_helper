@@ -8,17 +8,26 @@ module.exports = function recitationRoutes(db) {
 
   router.get('/texts', (req, res) => {
     const student = db.prepare('SELECT grade, textbook_version FROM students WHERE id = ?').get(req.user.id);
+    const grade =
+      req.query.grade !== undefined && req.query.grade !== ''
+        ? parseInt(req.query.grade, 10)
+        : student.grade;
+    const textbookVersion = req.query.textbookVersion || student.textbook_version;
+    if (Number.isNaN(grade) || grade < 3 || grade > 6) {
+      return res.status(400).json({ error: '年级无效' });
+    }
     const texts = db.prepare(
       'SELECT id, grade, unit, title FROM recitation_texts WHERE textbook_version = ? AND grade = ? ORDER BY unit, sort_order'
-    ).all(student.textbook_version, student.grade);
+    ).all(textbookVersion, grade);
     res.json(texts);
   });
 
   router.get('/texts/all', (req, res) => {
     const student = db.prepare('SELECT textbook_version FROM students WHERE id = ?').get(req.user.id);
+    const textbookVersion = req.query.textbookVersion || student.textbook_version;
     const texts = db.prepare(
       'SELECT id, grade, unit, title FROM recitation_texts WHERE textbook_version = ? ORDER BY grade, unit, sort_order'
-    ).all(student.textbook_version);
+    ).all(textbookVersion);
     res.json(texts);
   });
 

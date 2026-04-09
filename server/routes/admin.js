@@ -136,6 +136,15 @@ module.exports = function adminRoutes(db) {
     res.json({ message: '家长已删除' });
   });
 
+  router.put('/parents/:id/reset-password', (req, res) => {
+    const { password } = req.body;
+    if (!password) return res.status(400).json({ error: '密码不能为空' });
+    const hash = bcrypt.hashSync(password, 10);
+    const r = db.prepare('UPDATE parents SET password_hash = ? WHERE id = ?').run(hash, req.params.id);
+    if (r.changes === 0) return res.status(404).json({ error: '家长不存在' });
+    res.json({ message: '密码已更新' });
+  });
+
   // --- Bind student to parent ---
   router.post('/bind', (req, res) => {
     const { studentId, parentId } = req.body;

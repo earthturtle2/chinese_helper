@@ -103,6 +103,40 @@ body {
 
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
 
+.page-header-study { align-items: flex-start; flex-direction: column; }
+.study-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  width: 100%;
+}
+.study-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.study-filter-label { color: var(--text-light); white-space: nowrap; }
+.study-filter select {
+  padding: 8px 12px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  min-width: 100px;
+}
+.study-filter select:focus { border-color: var(--primary); outline: none; }
+.study-filter-toggle { margin-left: auto; }
+
+.register-hint {
+  font-size: 14px;
+  color: var(--text-light);
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
 h2 { font-size: 24px; font-weight: 800; color: var(--text); }
 h3 { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
 
@@ -259,21 +293,6 @@ h3 { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
 
 .login-card-wide { max-width: 480px; }
 .login-card-admin { max-width: 420px; }
-
-.form-row-register {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-.form-row-register select {
-  width: 100%;
-  padding: 12px 16px;
-  border: 2px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-size: 16px;
-  outline: none;
-}
-.form-row-register select:focus { border-color: var(--primary); }
 
 .page-hint {
   color: var(--text-light);

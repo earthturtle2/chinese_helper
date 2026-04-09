@@ -55,11 +55,21 @@ async function request(path, options = {}) {
   return data;
 }
 
+function studyQuery(params) {
+  if (!params) return '';
+  const q = new URLSearchParams();
+  if (params.grade != null && params.grade !== '') q.set('grade', String(params.grade));
+  if (params.textbookVersion) q.set('textbookVersion', params.textbookVersion);
+  const s = q.toString();
+  return s ? `?${s}` : '';
+}
+
 export const api = {
   login: (username, password) => request('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
   adminLogin: (username, password) => request('/auth/admin/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
   register: (payload) => request('/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
   me: () => request('/me'),
+  updateStudentProfile: (body) => request('/student/profile', { method: 'PUT', body: JSON.stringify(body) }),
 
   // Admin
   getSettings: () => request('/admin/settings'),
@@ -72,6 +82,7 @@ export const api = {
   getParents: () => request('/admin/parents'),
   createParent: (data) => request('/admin/parents', { method: 'POST', body: JSON.stringify(data) }),
   deleteParent: (id) => request(`/admin/parents/${id}`, { method: 'DELETE' }),
+  resetParentPassword: (id, password) => request(`/admin/parents/${id}/reset-password`, { method: 'PUT', body: JSON.stringify({ password }) }),
   bindStudentParent: (studentId, parentId) => request('/admin/bind', { method: 'POST', body: JSON.stringify({ studentId, parentId }) }),
   getAdminStats: () => request('/admin/stats'),
   getAdminWordLists: () => request('/admin/word-lists'),
@@ -84,8 +95,8 @@ export const api = {
   deleteInvitationCode: (id) => request(`/admin/invitation-codes/${id}`, { method: 'DELETE' }),
 
   // Dictation
-  getWordLists: () => request('/dictation/word-lists'),
-  getAllWordLists: () => request('/dictation/word-lists/all'),
+  getWordLists: (params) => request(`/dictation/word-lists${studyQuery(params)}`),
+  getAllWordLists: (params) => request(`/dictation/word-lists/all${studyQuery(params)}`),
   getWords: (listId) => request(`/dictation/word-lists/${listId}/words`),
   submitDictation: (data) => request('/dictation/submit', { method: 'POST', body: JSON.stringify(data) }),
   getMistakes: () => request('/dictation/mistakes'),
@@ -93,8 +104,8 @@ export const api = {
   getDictationHistory: () => request('/dictation/history'),
 
   // Recitation
-  getRecitationTexts: () => request('/recitation/texts'),
-  getAllRecitationTexts: () => request('/recitation/texts/all'),
+  getRecitationTexts: (params) => request(`/recitation/texts${studyQuery(params)}`),
+  getAllRecitationTexts: (params) => request(`/recitation/texts/all${studyQuery(params)}`),
   getRecitationText: (id) => request(`/recitation/texts/${id}`),
   submitRecitation: (data) => request('/recitation/submit', { method: 'POST', body: JSON.stringify(data) }),
   getRecitationHistory: () => request('/recitation/history'),

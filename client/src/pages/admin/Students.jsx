@@ -40,7 +40,7 @@ export default function AdminStudents() {
     const pwd = prompt(`请输入 ${name} 的新密码：`);
     if (!pwd) return;
     await api.resetStudentPassword(id, pwd);
-    alert('密码已重置');
+    alert('密码已更新');
   };
 
   return (
@@ -94,7 +94,7 @@ export default function AdminStudents() {
                 </select>
               </td>
               <td className="actions">
-                <button className="btn-sm" onClick={() => handleResetPwd(s.id, s.display_name)}>重置密码</button>
+                <button type="button" className="btn-sm" onClick={() => handleResetPwd(s.id, s.display_name)}>修改密码</button>
                 <button className="btn-sm btn-danger" onClick={() => handleDelete(s.id, s.display_name)}>删除</button>
               </td>
             </tr>

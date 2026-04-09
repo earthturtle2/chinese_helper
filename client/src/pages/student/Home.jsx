@@ -21,7 +21,7 @@ export default function StudentHome() {
     <div className="page student-home">
       <div className="welcome-section">
         <h2>你好，{user?.displayName || user?.username}！</h2>
-        <p className="subtitle">{user?.grade}年级 · {user?.textbookVersion}</p>
+        <p className="subtitle">默写、背诵中可按年级与教材版本浏览 · 当前 {user?.grade}年级 · {user?.textbookVersion}</p>
         <div className="usage-bar">
           <div className="usage-fill" style={{ width: `${usagePercent}%` }} />
           <span className="usage-text">今日已学习 {Math.round(user?.todayUsage || 0)} / {user?.dailyLimit || 40} 分钟</span>

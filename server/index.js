@@ -3,7 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const config = require('./config');
 const { initDatabase } = require('./db/init');
-const { authenticate } = require('./middleware/auth');
+const { authenticate, requireRole } = require('./middleware/auth');
 const { usageTracker } = require('./middleware/usageTracker');
 
 const db = initDatabase();
@@ -53,6 +53,22 @@ app.get('/api/me', authenticate, (req, res) => {
   }
 
   res.json({ id, username, role });
+});
+
+app.put('/api/student/profile', authenticate, requireRole('student'), (req, res) => {
+  const { grade, textbookVersion } = req.body;
+  const id = req.user.id;
+  if (grade !== undefined && grade !== null && grade !== '') {
+    const g = parseInt(grade, 10);
+    if (Number.isNaN(g) || g < 3 || g > 6) {
+      return res.status(400).json({ error: '年级必须在 3–6 之间' });
+    }
+    db.prepare('UPDATE students SET grade = ? WHERE id = ?').run(g, id);
+  }
+  if (textbookVersion !== undefined && textbookVersion !== null && String(textbookVersion).trim() !== '') {
+    db.prepare('UPDATE students SET textbook_version = ? WHERE id = ?').run(String(textbookVersion).trim(), id);
+  }
+  res.json({ message: '已保存' });
 });
 
 app.use('/audio', express.static(path.join(__dirname, '..', 'data', 'audio')));

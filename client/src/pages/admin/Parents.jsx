@@ -27,6 +27,13 @@ export default function AdminParents() {
     load();
   };
 
+  const handleResetPwd = async (id, name) => {
+    const pwd = prompt(`请输入家长 ${name} 的新密码：`);
+    if (!pwd) return;
+    await api.resetParentPassword(id, pwd);
+    alert('密码已更新');
+  };
+
   return (
     <div className="page">
       <div className="page-header">
@@ -59,7 +66,10 @@ export default function AdminParents() {
               <td>{p.phone || '-'}</td>
               <td>{p.children_names || '未绑定'}</td>
               <td>{p.created_at?.slice(0, 10)}</td>
-              <td><button className="btn-sm btn-danger" onClick={() => handleDelete(p.id, p.username)}>删除</button></td>
+              <td className="actions">
+                <button type="button" className="btn-sm" onClick={() => handleResetPwd(p.id, p.username)}>修改密码</button>
+                <button type="button" className="btn-sm btn-danger" onClick={() => handleDelete(p.id, p.username)}>删除</button>
+              </td>
             </tr>
           ))}
           {parents.length === 0 && <tr><td colSpan="5" className="empty">暂无家长</td></tr>}

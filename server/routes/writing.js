@@ -3,6 +3,11 @@ const { authenticate, requireRole } = require('../middleware/auth');
 const { recordUsage } = require('../middleware/usageTracker');
 const config = require('../config');
 
+function gradeForStudent(db, userId) {
+  const row = db.prepare('SELECT grade FROM students WHERE id = ?').get(userId);
+  return row?.grade ?? 4;
+}
+
 module.exports = function writingRoutes(db) {
   const router = Router();
   router.use(authenticate, requireRole('student'));
@@ -51,7 +56,7 @@ module.exports = function writingRoutes(db) {
       .get(req.params.id, req.user.id);
     if (!session) return res.status(404).json({ error: '会话不存在' });
 
-    const questions = await generateInspireQuestions(session.topic, session.topic_type, req.user.grade);
+    const questions = await generateInspireQuestions(session.topic, session.topic_type, gradeForStudent(db, req.user.id));
 
     db.prepare("UPDATE writing_sessions SET phase = 'outline', updated_at = datetime('now') WHERE id = ?")
       .run(req.params.id);
@@ -81,7 +86,7 @@ module.exports = function writingRoutes(db) {
       .get(req.params.id, req.user.id);
     if (!session) return res.status(404).json({ error: '会话不存在' });
 
-    const feedback = await analyzeWriting(session.draft_text, session.topic, session.topic_type, req.user.grade);
+    const feedback = await analyzeWriting(session.draft_text, session.topic, session.topic_type, gradeForStudent(db, req.user.id));
 
     db.prepare(
       "UPDATE writing_sessions SET feedback_json = ?, phase = 'review', updated_at = datetime('now') WHERE id = ?"
@@ -94,7 +99,7 @@ module.exports = function writingRoutes(db) {
 
   router.post('/vocabulary-suggest', async (req, res) => {
     const { text, context } = req.body;
-    const suggestions = await suggestVocabulary(text, context, req.user.grade);
+    const suggestions = await suggestVocabulary(text, context, gradeForStudent(db, req.user.id));
     res.json(suggestions);
   });
 
