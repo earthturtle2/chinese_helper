@@ -15,7 +15,7 @@ export default function LessonStudyDetail() {
   const [data, setData] = useState(null);
   const [reading, setReading] = useState(false);
   const utterRef = useRef(null);
-  const [wordForm, setWordForm] = useState({ word: '', pinyin: '' });
+  const [wordForm, setWordForm] = useState({ word: '' });
   const [wordMsg, setWordMsg] = useState('');
 
   const load = useCallback(() => {
@@ -54,20 +54,40 @@ export default function LessonStudyDetail() {
     };
   }, []);
 
-  const addWord = async () => {
-    const w = wordForm.word.trim();
+  const addWord = async (wordOverride) => {
+    const raw = wordOverride != null ? String(wordOverride) : wordForm.word;
+    const w = raw.trim();
     if (!w) return;
     setWordMsg('');
     try {
-      const body = { word: w, pinyin: wordForm.pinyin.trim() };
+      const body = { word: w };
       if (isParent) body.studentId = Number(parentStudentId);
       await api.addLessonWord(textId, body);
-      setWordForm({ word: '', pinyin: '' });
-      setWordMsg('已添加');
+      setWordForm({ word: '' });
+      setWordMsg('已添加，拼音已自动生成');
       load();
     } catch (e) {
       setWordMsg(e.message || '添加失败');
     }
+  };
+
+  const addSelectedFromLesson = async () => {
+    const sel = window.getSelection();
+    const t = sel && sel.toString ? sel.toString().trim() : '';
+    if (!t) {
+      setWordMsg('请先在课文正文中用鼠标拖选要添加的字或词');
+      return;
+    }
+    const cleaned = t.replace(/[^\u4e00-\u9fff]/g, '');
+    if (!cleaned) {
+      setWordMsg('请只选择汉字');
+      return;
+    }
+    if (cleaned.length > 24) {
+      setWordMsg('一次最多添加 24 个汉字');
+      return;
+    }
+    await addWord(cleaned);
   };
 
   const removeWord = async (wordId) => {
@@ -110,29 +130,31 @@ export default function LessonStudyDetail() {
 
       <div className="form-card lesson-original">
         <h3>课文正文</h3>
-        <div className="lesson-original-body">{data.content}</div>
+        <p className="hint-text">在下方正文中拖选字词，点击「加入生词」即可添加（拼音会自动生成）。</p>
+        <div className="lesson-original-body lesson-original-selectable">{data.content}</div>
+        <div className="lesson-selection-bar">
+          <button type="button" className="btn-secondary" onClick={addSelectedFromLesson}>
+            将选中的字词加入生词
+          </button>
+        </div>
       </div>
 
       <div className="form-card lesson-words-section">
         <h3>本课默写生词</h3>
         <p className="hint-text">
           {isParent
-            ? '以下生词保存到孩子的账号，孩子登录后可在本页默写。'
-            : '自行添加本课要默写的字词；也可请家长在「家长看板」中代你添加。'}
+            ? '以下生词保存到孩子的账号；添加后拼音会自动生成，孩子可在「生词默写」中选用本课。'
+            : '手动输入或在正文中选词添加；保存后拼音自动生成。已添加生词的课文会出现在「生词默写」中。'}
         </p>
 
         <div className="form-row lesson-word-form">
           <input
-            placeholder="汉字"
+            placeholder="手动输入汉字（无需填拼音）"
             value={wordForm.word}
             onChange={(e) => setWordForm((f) => ({ ...f, word: e.target.value }))}
+            maxLength={32}
           />
-          <input
-            placeholder="拼音"
-            value={wordForm.pinyin}
-            onChange={(e) => setWordForm((f) => ({ ...f, pinyin: e.target.value }))}
-          />
-          <button type="button" className="btn-primary" onClick={addWord}>
+          <button type="button" className="btn-primary" onClick={() => addWord()}>
             添加
           </button>
         </div>

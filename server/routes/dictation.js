@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { recordUsage } = require('../middleware/usageTracker');
+const { normalizeVolume } = require('../utils/volume');
 
 module.exports = function dictationRoutes(db) {
   const router = Router();
@@ -37,6 +38,54 @@ module.exports = function dictationRoutes(db) {
     });
     tx();
   }
+
+  /** 当前学生已添加过生词的课文，供「生词默写」入口选择 */
+  router.get('/lesson-texts', (req, res) => {
+    const student = db
+      .prepare('SELECT grade, textbook_version, textbook_volume FROM students WHERE id = ?')
+      .get(req.user.id);
+    if (!student) return res.status(404).json({ error: '学生不存在' });
+    const showAll =
+      req.query.all === '1' || req.query.all === 'true' || req.query.showAll === '1';
+    const textbookVersion = req.query.textbookVersion || student.textbook_version;
+    const grade =
+      req.query.grade !== undefined && req.query.grade !== ''
+        ? parseInt(req.query.grade, 10)
+        : student.grade;
+    const volume = normalizeVolume(
+      req.query.volume !== undefined && req.query.volume !== ''
+        ? req.query.volume
+        : student.textbook_volume
+    );
+    if (Number.isNaN(grade) || grade < 3 || grade > 6) {
+      return res.status(400).json({ error: '年级无效' });
+    }
+    let rows;
+    if (showAll) {
+      rows = db
+        .prepare(
+          `SELECT rt.id, rt.grade, rt.volume, rt.unit, rt.title, COUNT(slw.id) AS word_count
+           FROM student_lesson_words slw
+           JOIN recitation_texts rt ON rt.id = slw.recitation_text_id
+           WHERE slw.student_id = ? AND rt.textbook_version = ?
+           GROUP BY rt.id
+           ORDER BY rt.grade, rt.unit, rt.sort_order`
+        )
+        .all(req.user.id, textbookVersion);
+    } else {
+      rows = db
+        .prepare(
+          `SELECT rt.id, rt.grade, rt.volume, rt.unit, rt.title, COUNT(slw.id) AS word_count
+           FROM student_lesson_words slw
+           JOIN recitation_texts rt ON rt.id = slw.recitation_text_id
+           WHERE slw.student_id = ? AND rt.textbook_version = ? AND rt.grade = ? AND rt.volume = ?
+           GROUP BY rt.id
+           ORDER BY rt.unit, rt.sort_order`
+        )
+        .all(req.user.id, textbookVersion, grade, volume);
+    }
+    res.json(rows);
+  });
 
   router.get('/word-lists', (req, res) => {
     const student = db.prepare('SELECT grade, textbook_version FROM students WHERE id = ?').get(req.user.id);

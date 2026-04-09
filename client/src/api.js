@@ -62,6 +62,7 @@ function studyQuery(params) {
   if (params.textbookVersion) q.set('textbookVersion', params.textbookVersion);
   if (params.textbookVolume) q.set('volume', params.textbookVolume);
   if (params.studentId != null && params.studentId !== '') q.set('studentId', String(params.studentId));
+  if (params.all) q.set('all', '1');
   const s = q.toString();
   return s ? `?${s}` : '';
 }
@@ -101,6 +102,8 @@ export const api = {
   // Dictation
   getWordLists: (params) => request(`/dictation/word-lists${studyQuery(params)}`),
   getAllWordLists: (params) => request(`/dictation/word-lists/all${studyQuery(params)}`),
+  /** 已在课文学习中添加过生词的课文列表（用于生词默写入口） */
+  getLessonDictationTexts: (params) => request(`/dictation/lesson-texts${studyQuery(params)}`),
   getWords: (listId) => request(`/dictation/word-lists/${listId}/words`),
   submitDictation: (data) => request('/dictation/submit', { method: 'POST', body: JSON.stringify(data) }),
   getMistakes: () => request('/dictation/mistakes'),

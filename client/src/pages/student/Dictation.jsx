@@ -4,22 +4,30 @@ import { api } from '../../api';
 import { useAuth } from '../../context/AuthContext';
 
 const TEXTBOOKS = ['统编版', '人教版', '苏教版', '北师大版'];
+const VOLUMES = ['上册', '下册'];
 
 export default function Dictation() {
   const { user, refreshUser } = useAuth();
   const [lists, setLists] = useState([]);
+  const [lessonTexts, setLessonTexts] = useState([]);
   const [showAll, setShowAll] = useState(false);
   const [grade, setGrade] = useState(3);
   const [textbookVersion, setTextbookVersion] = useState('统编版');
+  const [textbookVolume, setTextbookVolume] = useState('上册');
 
   useEffect(() => {
     if (user?.grade) setGrade(user.grade);
     if (user?.textbookVersion) setTextbookVersion(user.textbookVersion);
-  }, [user?.grade, user?.textbookVersion]);
+    if (user?.textbookVolume) setTextbookVolume(user.textbookVolume);
+  }, [user?.grade, user?.textbookVersion, user?.textbookVolume]);
 
-  const persistPrefs = useCallback(async (nextGrade, nextTextbook) => {
+  const persistPrefs = useCallback(async (nextGrade, nextTextbook, nextVolume) => {
     try {
-      await api.updateStudentProfile({ grade: nextGrade, textbookVersion: nextTextbook });
+      await api.updateStudentProfile({
+        grade: nextGrade,
+        textbookVersion: nextTextbook,
+        textbookVolume: nextVolume,
+      });
       await refreshUser();
     } catch (e) {
       console.error(e);
@@ -32,20 +40,32 @@ export default function Dictation() {
     fetcher(params).then(setLists).catch(console.error);
   }, [grade, textbookVersion, showAll]);
 
+  const loadLessonTexts = useCallback(() => {
+    const params = { grade, textbookVersion, textbookVolume, all: showAll };
+    api.getLessonDictationTexts(params).then(setLessonTexts).catch(console.error);
+  }, [grade, textbookVersion, textbookVolume, showAll]);
+
   useEffect(() => {
     loadLists();
-  }, [loadLists]);
+    loadLessonTexts();
+  }, [loadLists, loadLessonTexts]);
 
   const onGradeChange = async (e) => {
     const g = Number(e.target.value);
     setGrade(g);
-    await persistPrefs(g, textbookVersion);
+    await persistPrefs(g, textbookVersion, textbookVolume);
   };
 
   const onTextbookChange = async (e) => {
     const t = e.target.value;
     setTextbookVersion(t);
-    await persistPrefs(grade, t);
+    await persistPrefs(grade, t, textbookVolume);
+  };
+
+  const onVolumeChange = async (e) => {
+    const v = e.target.value;
+    setTextbookVolume(v);
+    await persistPrefs(grade, textbookVersion, v);
   };
 
   return (
@@ -69,6 +89,14 @@ export default function Dictation() {
               ))}
             </select>
           </label>
+          <label className="study-filter">
+            <span className="study-filter-label">分册</span>
+            <select value={textbookVolume} onChange={onVolumeChange}>
+              {VOLUMES.map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+          </label>
           <label className="toggle-label study-filter-toggle">
             <input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} />
             显示所有年级
@@ -76,6 +104,30 @@ export default function Dictation() {
         </div>
       </div>
 
+      <h3 className="dictation-subsection-title">课文生词</h3>
+      <p className="hint-text dictation-subsection-hint">
+        与「课文学习」联动：仅列出你已为本课添加过默写生词的课文；点击进入默写。
+      </p>
+      <div className="card-list">
+        {lessonTexts.map((t) => (
+          <Link
+            key={`lesson-${t.id}`}
+            to={`/student/lesson-study/${t.id}/dictation`}
+            className="list-card list-card-lesson"
+          >
+            <div className="list-grade">{t.grade}年级 · {t.volume}</div>
+            <div className="list-unit">第{t.unit}单元</div>
+            <div className="list-title">{t.title}</div>
+            <div className="list-meta">共 {t.word_count} 个生词</div>
+          </Link>
+        ))}
+        {lessonTexts.length === 0 && (
+          <p className="empty-hint">暂无课文生词。请先在「课文学习」中添加本课默写生词。</p>
+        )}
+      </div>
+
+      <h3 className="dictation-subsection-title">单元词表</h3>
+      <p className="hint-text dictation-subsection-hint">系统预置单元词表默写。</p>
       <div className="card-list">
         {lists.map(list => (
           <Link key={list.id} to={`/student/dictation/${list.id}`} className="list-card">

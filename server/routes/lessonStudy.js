@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { normalizeVolume } = require('../utils/volume');
+const { toPinyin, extractHanzi } = require('../utils/chinesePinyin');
 
 module.exports = function lessonStudyRoutes(db) {
   const router = Router();
@@ -88,18 +89,26 @@ module.exports = function lessonStudyRoutes(db) {
     const textId = parseInt(req.params.id, 10);
     const text = db.prepare('SELECT id FROM recitation_texts WHERE id = ?').get(textId);
     if (!text) return res.status(404).json({ error: '课文不存在' });
-    const { word, pinyin, sortOrder } = req.body;
-    const w = word != null ? String(word).trim() : '';
-    if (!w) return res.status(400).json({ error: '请填写生字' });
+    const { word, sortOrder } = req.body;
+    const raw = word != null ? String(word).trim() : '';
+    const w = extractHanzi(raw);
+    if (!w) return res.status(400).json({ error: '请填写有效的汉字' });
+    const dup = db
+      .prepare(
+        'SELECT id FROM student_lesson_words WHERE student_id = ? AND recitation_text_id = ? AND word = ?'
+      )
+      .get(sid, textId, w);
+    if (dup) return res.status(409).json({ error: '该生词已在本课中' });
     const sort =
       sortOrder != null && !Number.isNaN(parseInt(sortOrder, 10)) ? parseInt(sortOrder, 10) : 0;
+    const py = toPinyin(w);
     const info = db
       .prepare(
         `INSERT INTO student_lesson_words (student_id, recitation_text_id, word, pinyin, sort_order)
          VALUES (?, ?, ?, ?, ?)`
       )
-      .run(sid, textId, w, pinyin != null ? String(pinyin).trim() : '', sort);
-    res.json({ id: info.lastInsertRowid, message: '已添加' });
+      .run(sid, textId, w, py, sort);
+    res.json({ id: info.lastInsertRowid, message: '已添加', pinyin: py });
   });
 
   router.delete('/words/:wordId', (req, res) => {
