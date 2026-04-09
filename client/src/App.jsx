@@ -20,6 +20,15 @@ import ParentDashboard from './pages/parent/Dashboard';
 import ParentWeekly from './pages/parent/Weekly';
 import Layout from './components/Layout';
 
+function getHomePath(role) {
+  switch (role) {
+    case 'admin': return '/admin';
+    case 'student': return '/student';
+    case 'parent': return '/parent';
+    default: return '/login';
+  }
+}
+
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="loading">加载中...</div>;
@@ -33,6 +42,31 @@ function ProtectedRoute({ children, roles }) {
   return children;
 }
 
+/** RR7: each URL needs a parent Route with explicit path + index child, or Outlet stays empty. */
+function AdminLayout() {
+  return (
+    <ProtectedRoute roles={['admin']}>
+      <Layout />
+    </ProtectedRoute>
+  );
+}
+
+function StudentLayout() {
+  return (
+    <ProtectedRoute roles={['student']}>
+      <Layout />
+    </ProtectedRoute>
+  );
+}
+
+function ParentLayout() {
+  return (
+    <ProtectedRoute roles={['parent']}>
+      <Layout />
+    </ProtectedRoute>
+  );
+}
+
 export default function App() {
   const { user, loading } = useAuth();
 
@@ -44,41 +78,55 @@ export default function App() {
       <Route path="/admin/login" element={user?.role === 'admin' ? <Navigate to="/admin" replace /> : <AdminLogin />} />
       <Route path="/register" element={user ? <Navigate to={getHomePath(user.role)} replace /> : <Register />} />
 
-      {/* Pathless layout routes: full paths per child (avoids RR7 nested relative path / Outlet issues) */}
-      <Route element={<ProtectedRoute roles={['admin']}><Layout /></ProtectedRoute>}>
-        <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/admin/students" element={<AdminStudents />} />
-        <Route path="/admin/parents" element={<AdminParents />} />
-        <Route path="/admin/content" element={<AdminContent />} />
-        <Route path="/admin/invitations" element={<AdminInvitations />} />
+      <Route path="/admin" element={<AdminLayout />}>
+        <Route index element={<AdminDashboard />} />
+      </Route>
+      <Route path="/admin/students" element={<AdminLayout />}>
+        <Route index element={<AdminStudents />} />
+      </Route>
+      <Route path="/admin/parents" element={<AdminLayout />}>
+        <Route index element={<AdminParents />} />
+      </Route>
+      <Route path="/admin/content" element={<AdminLayout />}>
+        <Route index element={<AdminContent />} />
+      </Route>
+      <Route path="/admin/invitations" element={<AdminLayout />}>
+        <Route index element={<AdminInvitations />} />
       </Route>
 
-      <Route element={<ProtectedRoute roles={['student']}><Layout /></ProtectedRoute>}>
-        <Route path="/student" element={<StudentHome />} />
-        <Route path="/student/dictation" element={<Dictation />} />
-        <Route path="/student/dictation/:listId" element={<DictationPractice />} />
-        <Route path="/student/mistakes" element={<MistakeBook />} />
-        <Route path="/student/recitation" element={<Recitation />} />
-        <Route path="/student/recitation/:textId" element={<RecitationPractice />} />
-        <Route path="/student/writing" element={<Writing />} />
-        <Route path="/student/writing/:sessionId" element={<WritingSession />} />
+      <Route path="/student" element={<StudentLayout />}>
+        <Route index element={<StudentHome />} />
+      </Route>
+      <Route path="/student/dictation" element={<StudentLayout />}>
+        <Route index element={<Dictation />} />
+      </Route>
+      <Route path="/student/dictation/:listId" element={<StudentLayout />}>
+        <Route index element={<DictationPractice />} />
+      </Route>
+      <Route path="/student/mistakes" element={<StudentLayout />}>
+        <Route index element={<MistakeBook />} />
+      </Route>
+      <Route path="/student/recitation" element={<StudentLayout />}>
+        <Route index element={<Recitation />} />
+      </Route>
+      <Route path="/student/recitation/:textId" element={<StudentLayout />}>
+        <Route index element={<RecitationPractice />} />
+      </Route>
+      <Route path="/student/writing" element={<StudentLayout />}>
+        <Route index element={<Writing />} />
+      </Route>
+      <Route path="/student/writing/:sessionId" element={<StudentLayout />}>
+        <Route index element={<WritingSession />} />
       </Route>
 
-      <Route element={<ProtectedRoute roles={['parent']}><Layout /></ProtectedRoute>}>
-        <Route path="/parent" element={<ParentDashboard />} />
-        <Route path="/parent/weekly/:studentId" element={<ParentWeekly />} />
+      <Route path="/parent" element={<ParentLayout />}>
+        <Route index element={<ParentDashboard />} />
+      </Route>
+      <Route path="/parent/weekly/:studentId" element={<ParentLayout />}>
+        <Route index element={<ParentWeekly />} />
       </Route>
 
       <Route path="*" element={<Navigate to={user ? getHomePath(user.role) : '/login'} replace />} />
     </Routes>
   );
-}
-
-function getHomePath(role) {
-  switch (role) {
-    case 'admin': return '/admin';
-    case 'student': return '/student';
-    case 'parent': return '/parent';
-    default: return '/login';
-  }
 }
