@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-APP_DIR="/opt/chinese_helper"
+APP_DIR="/data/node-apps/chinese_helper"
 cd "$APP_DIR"
 
 echo "=== Pulling latest code ==="

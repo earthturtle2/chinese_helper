@@ -19,7 +19,7 @@ server {
 
     # Frontend static files
     location / {
-        root /opt/chinese_helper/client/dist;
+        root /data/node-apps/chinese_helper/client/dist;
         try_files $uri $uri/ /index.html;
 
         location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?|ttf|eot|wasm|onnx)$ {
@@ -30,7 +30,7 @@ server {
 
     # TTS audio files
     location /audio/ {
-        alias /opt/chinese_helper/data/audio/;
+        alias /data/node-apps/chinese_helper/data/audio/;
         expires 30d;
         add_header Cache-Control "public";
     }

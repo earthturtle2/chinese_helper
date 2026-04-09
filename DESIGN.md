@@ -477,15 +477,15 @@ flowchart LR
 **服务器初始化（首次部署）：**
 
 1. 服务器生成 SSH 密钥并添加到 GitHub 账户的 Deploy Keys（只需读取权限）
-2. 克隆仓库到部署目录：`git clone git@github.com:earthturtle2/chinese_helper.git /opt/chinese_helper`
-3. 安装依赖：`cd /opt/chinese_helper && npm install --production`
+2. 克隆仓库到部署目录：`git clone git@github.com:earthturtle2/chinese_helper.git /data/node-apps/chinese_helper`
+3. 安装依赖：`cd /data/node-apps/chinese_helper && npm install --production`
 4. 复制环境配置：`cp .env.example .env` 并填写 DeepSeek API Key 等敏感信息（`.env` 已加入 `.gitignore`）
 5. 启动服务：`pm2 start ecosystem.config.js && pm2 save`
 
 **日常更新（后续部署）：**
 
 ```
-cd /opt/chinese_helper
+cd /data/node-apps/chinese_helper
 git pull origin main
 npm install --production
 pm2 restart ecosystem.config.js
