@@ -31,7 +31,7 @@ module.exports = function authRoutes(db) {
     }
 
     let user = db.prepare(
-      'SELECT id, username, display_name, password_hash, grade, textbook_version FROM students WHERE username = ?'
+      'SELECT id, username, display_name, password_hash, grade, textbook_version, textbook_volume FROM students WHERE username = ?'
     ).get(username);
     if (user && bcrypt.compareSync(password, user.password_hash)) {
       const token = generateToken({ id: user.id, username: user.username, role: 'student', grade: user.grade });
@@ -42,6 +42,7 @@ module.exports = function authRoutes(db) {
         displayName: user.display_name,
         grade: user.grade,
         textbookVersion: user.textbook_version,
+        textbookVolume: user.textbook_volume,
       });
     }
 
@@ -104,14 +105,14 @@ module.exports = function authRoutes(db) {
 
     const tx = db.transaction(() => {
       db.prepare(
-        'INSERT INTO students (username, display_name, password_hash, grade, textbook_version) VALUES (?, ?, ?, ?, ?)'
-      ).run(username, displayName || username, hash, 3, '人教版');
+        'INSERT INTO students (username, display_name, password_hash, grade, textbook_version, textbook_volume) VALUES (?, ?, ?, ?, ?, ?)'
+      ).run(username, displayName || username, hash, 3, '统编版', '上册');
       db.prepare('UPDATE invitation_codes SET used_count = used_count + 1 WHERE id = ?').run(row.id);
     });
     tx();
 
     const student = db.prepare(
-      'SELECT id, username, display_name, grade, textbook_version FROM students WHERE username = ?'
+      'SELECT id, username, display_name, grade, textbook_version, textbook_volume FROM students WHERE username = ?'
     ).get(username);
 
     const token = generateToken({
@@ -128,6 +129,7 @@ module.exports = function authRoutes(db) {
       displayName: student.display_name,
       grade: student.grade,
       textbookVersion: student.textbook_version,
+      textbookVolume: student.textbook_volume,
     });
   });
 

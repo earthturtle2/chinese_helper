@@ -3,14 +3,14 @@ import { Link } from 'react-router-dom';
 import { api } from '../../api';
 import { useAuth } from '../../context/AuthContext';
 
-const TEXTBOOKS = ['人教版', '苏教版', '北师大版'];
+const TEXTBOOKS = ['统编版', '人教版', '苏教版', '北师大版'];
 
 export default function Dictation() {
   const { user, refreshUser } = useAuth();
   const [lists, setLists] = useState([]);
   const [showAll, setShowAll] = useState(false);
   const [grade, setGrade] = useState(3);
-  const [textbookVersion, setTextbookVersion] = useState('人教版');
+  const [textbookVersion, setTextbookVersion] = useState('统编版');
 
   useEffect(() => {
     if (user?.grade) setGrade(user.grade);

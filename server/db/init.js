@@ -10,6 +10,26 @@ function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
+/** Add volume columns to existing SQLite DBs created before textbook 上/下册 split */
+function migrateRecitationVolume(db) {
+  const rt = db.prepare('PRAGMA table_info(recitation_texts)').all();
+  if (!rt.some((c) => c.name === 'volume')) {
+    db.exec("ALTER TABLE recitation_texts ADD COLUMN volume TEXT NOT NULL DEFAULT '上册'");
+  }
+  const st = db.prepare('PRAGMA table_info(students)').all();
+  if (!st.some((c) => c.name === 'textbook_volume')) {
+    db.exec("ALTER TABLE students ADD COLUMN textbook_volume TEXT NOT NULL DEFAULT '上册'");
+  }
+  const hasIdx = db
+    .prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_recitation_texts_lookup'")
+    .get();
+  if (!hasIdx) {
+    db.exec(
+      'CREATE INDEX IF NOT EXISTS idx_recitation_texts_lookup ON recitation_texts(textbook_version, grade, volume)'
+    );
+  }
+}
+
 function initDatabase() {
   ensureDir(DATA_DIR);
   ensureDir(config.uploadDir);
@@ -20,6 +40,7 @@ function initDatabase() {
 
   const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf-8');
   db.exec(schema);
+  migrateRecitationVolume(db);
 
   const adminExists = db.prepare('SELECT id FROM admins LIMIT 1').get();
   if (!adminExists) {
@@ -98,7 +119,7 @@ function seedSampleWordList(db) {
 
   const tx = db.transaction(() => {
     for (const list of sampleData) {
-      const info = insertList.run('人教版', list.grade, list.unit, list.unitTitle);
+      const info = insertList.run('统编版', list.grade, list.unit, list.unitTitle);
       list.words.forEach((w, i) => {
         insertWord.run(info.lastInsertRowid, w.word, w.pinyin, i);
       });
@@ -118,11 +139,11 @@ function seedSampleWordList(db) {
   ];
 
   const insertText = db.prepare(
-    'INSERT INTO recitation_texts (textbook_version, grade, unit, title, content, sort_order) VALUES (?, ?, ?, ?, ?, ?)'
+    'INSERT INTO recitation_texts (textbook_version, grade, volume, unit, title, content, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)'
   );
   const txTexts = db.transaction(() => {
     sampleTexts.forEach((t, i) => {
-      insertText.run('人教版', t.grade, t.unit, t.title, t.content, i);
+      insertText.run('统编版', t.grade, '上册', t.unit, t.title, t.content, i);
     });
   });
   txTexts();

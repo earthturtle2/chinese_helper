@@ -60,6 +60,7 @@ function studyQuery(params) {
   const q = new URLSearchParams();
   if (params.grade != null && params.grade !== '') q.set('grade', String(params.grade));
   if (params.textbookVersion) q.set('textbookVersion', params.textbookVersion);
+  if (params.textbookVolume) q.set('volume', params.textbookVolume);
   const s = q.toString();
   return s ? `?${s}` : '';
 }
@@ -89,6 +90,8 @@ export const api = {
   createWordList: (data) => request('/admin/word-lists', { method: 'POST', body: JSON.stringify(data) }),
   getAdminRecitationTexts: () => request('/admin/recitation-texts'),
   createRecitationText: (data) => request('/admin/recitation-texts', { method: 'POST', body: JSON.stringify(data) }),
+  importRecitationTextsBatch: (items) =>
+    request('/admin/recitation-texts/batch', { method: 'POST', body: JSON.stringify({ items }) }),
 
   getInvitationCodes: () => request('/admin/invitation-codes'),
   createInvitationCode: (data) => request('/admin/invitation-codes', { method: 'POST', body: JSON.stringify(data || {}) }),

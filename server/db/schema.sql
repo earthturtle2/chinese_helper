@@ -27,9 +27,10 @@ CREATE TABLE IF NOT EXISTS students (
   username         TEXT    UNIQUE NOT NULL,
   display_name     TEXT    NOT NULL DEFAULT '',
   password_hash    TEXT    NOT NULL,
-  grade            INTEGER NOT NULL DEFAULT 3 CHECK(grade BETWEEN 3 AND 6),
-  textbook_version TEXT    NOT NULL DEFAULT '人教版',
-  parent_id        INTEGER REFERENCES parents(id) ON DELETE SET NULL,
+  grade             INTEGER NOT NULL DEFAULT 3 CHECK(grade BETWEEN 3 AND 6),
+  textbook_version  TEXT    NOT NULL DEFAULT '统编版',
+  textbook_volume   TEXT    NOT NULL DEFAULT '上册',
+  parent_id         INTEGER REFERENCES parents(id) ON DELETE SET NULL,
   daily_limit      INTEGER DEFAULT NULL,
   created_at       TEXT    DEFAULT (datetime('now'))
 );
@@ -125,6 +126,7 @@ CREATE TABLE IF NOT EXISTS recitation_texts (
   id               INTEGER PRIMARY KEY AUTOINCREMENT,
   textbook_version TEXT    NOT NULL,
   grade            INTEGER NOT NULL,
+  volume           TEXT    NOT NULL DEFAULT '上册',
   unit             INTEGER NOT NULL,
   title            TEXT    NOT NULL,
   content          TEXT    NOT NULL,

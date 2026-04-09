@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const config = require('./config');
 const { initDatabase } = require('./db/init');
+const { normalizeVolume, isValidVolume } = require('./utils/volume');
 const { authenticate, requireRole } = require('./middleware/auth');
 const { usageTracker } = require('./middleware/usageTracker');
 
@@ -28,7 +29,9 @@ app.get('/api/me', authenticate, (req, res) => {
   const { id, username, role, grade } = req.user;
 
   if (role === 'student') {
-    const student = db.prepare('SELECT display_name, grade, textbook_version FROM students WHERE id = ?').get(id);
+    const student = db.prepare(
+      'SELECT display_name, grade, textbook_version, textbook_volume FROM students WHERE id = ?'
+    ).get(id);
     const today = new Date().toISOString().slice(0, 10);
     const usage = db.prepare('SELECT minutes FROM usage_log WHERE student_id = ? AND date = ?').get(id, today);
     const globalLimit = db.prepare("SELECT value FROM settings WHERE key = 'default_daily_limit'").get();
@@ -40,6 +43,7 @@ app.get('/api/me', authenticate, (req, res) => {
       displayName: student?.display_name,
       grade: student?.grade,
       textbookVersion: student?.textbook_version,
+      textbookVolume: student?.textbook_volume,
       todayUsage: usage?.minutes || 0,
       dailyLimit: limit,
     });
@@ -56,7 +60,7 @@ app.get('/api/me', authenticate, (req, res) => {
 });
 
 app.put('/api/student/profile', authenticate, requireRole('student'), (req, res) => {
-  const { grade, textbookVersion } = req.body;
+  const { grade, textbookVersion, textbookVolume } = req.body;
   const id = req.user.id;
   if (grade !== undefined && grade !== null && grade !== '') {
     const g = parseInt(grade, 10);
@@ -67,6 +71,12 @@ app.put('/api/student/profile', authenticate, requireRole('student'), (req, res)
   }
   if (textbookVersion !== undefined && textbookVersion !== null && String(textbookVersion).trim() !== '') {
     db.prepare('UPDATE students SET textbook_version = ? WHERE id = ?').run(String(textbookVersion).trim(), id);
+  }
+  if (textbookVolume !== undefined && textbookVolume !== null && String(textbookVolume).trim() !== '') {
+    if (!isValidVolume(textbookVolume)) {
+      return res.status(400).json({ error: '分册须为「上册」或「下册」' });
+    }
+    db.prepare('UPDATE students SET textbook_volume = ? WHERE id = ?').run(normalizeVolume(textbookVolume), id);
   }
   res.json({ message: '已保存' });
 });

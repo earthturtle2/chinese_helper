@@ -5,7 +5,14 @@ export default function AdminStudents() {
   const [students, setStudents] = useState([]);
   const [parents, setParents] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ username: '', displayName: '', password: '', grade: 3, textbookVersion: '人教版' });
+  const [form, setForm] = useState({
+    username: '',
+    displayName: '',
+    password: '',
+    grade: 3,
+    textbookVersion: '统编版',
+    textbookVolume: '上册',
+  });
   const [error, setError] = useState('');
 
   const load = () => {
@@ -23,7 +30,14 @@ export default function AdminStudents() {
     setError('');
     try {
       await api.createStudent(form);
-      setForm({ username: '', displayName: '', password: '', grade: 3, textbookVersion: '人教版' });
+      setForm({
+        username: '',
+        displayName: '',
+        password: '',
+        grade: 3,
+        textbookVersion: '统编版',
+        textbookVolume: '上册',
+      });
       setShowForm(false);
       load();
     } catch (err) { setError(err.message); }
@@ -69,9 +83,14 @@ export default function AdminStudents() {
               {[3,4,5,6].map(g => <option key={g} value={g}>{g}年级</option>)}
             </select>
             <select value={form.textbookVersion} onChange={e => setForm(f => ({ ...f, textbookVersion: e.target.value }))}>
+              <option value="统编版">统编版</option>
               <option value="人教版">人教版</option>
               <option value="苏教版">苏教版</option>
               <option value="北师大版">北师大版</option>
+            </select>
+            <select value={form.textbookVolume} onChange={e => setForm(f => ({ ...f, textbookVolume: e.target.value }))}>
+              <option value="上册">上册</option>
+              <option value="下册">下册</option>
             </select>
             <button type="submit" className="btn-primary">创建</button>
           </div>
@@ -81,7 +100,7 @@ export default function AdminStudents() {
       <table className="data-table">
         <thead>
           <tr>
-            <th>用户名</th><th>昵称</th><th>年级</th><th>教材</th><th>绑定家长</th><th>操作</th>
+            <th>用户名</th><th>昵称</th><th>年级</th><th>教材</th><th>分册</th><th>绑定家长</th><th>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -91,6 +110,18 @@ export default function AdminStudents() {
               <td>{s.display_name}</td>
               <td>{s.grade}年级</td>
               <td>{s.textbook_version}</td>
+              <td>
+                <select
+                  value={s.textbook_volume || '上册'}
+                  onChange={async (e) => {
+                    await api.updateStudent(s.id, { textbookVolume: e.target.value });
+                    load();
+                  }}
+                >
+                  <option value="上册">上册</option>
+                  <option value="下册">下册</option>
+                </select>
+              </td>
               <td>
                 <select
                   value={s.parent_id != null && s.parent_id !== '' ? String(s.parent_id) : ''}
@@ -108,7 +139,7 @@ export default function AdminStudents() {
               </td>
             </tr>
           ))}
-          {students.length === 0 && <tr><td colSpan="6" className="empty">暂无学生</td></tr>}
+          {students.length === 0 && <tr><td colSpan="7" className="empty">暂无学生</td></tr>}
         </tbody>
       </table>
     </div>

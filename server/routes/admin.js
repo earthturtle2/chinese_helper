@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const bcrypt = require('bcryptjs');
 const { authenticate, requireRole } = require('../middleware/auth');
+const { normalizeVolume, isValidVolume } = require('../utils/volume');
 const {
   generatePlainInviteCode,
   normalizeInviteCode,
@@ -44,7 +45,7 @@ module.exports = function adminRoutes(db) {
   // --- Students ---
   router.get('/students', (req, res) => {
     const students = db.prepare(`
-      SELECT s.id, s.username, s.display_name, s.grade, s.textbook_version, s.daily_limit,
+      SELECT s.id, s.username, s.display_name, s.grade, s.textbook_version, s.textbook_volume, s.daily_limit,
              s.parent_id, p.username as parent_username, s.created_at
       FROM students s LEFT JOIN parents p ON s.parent_id = p.id
       ORDER BY s.grade, s.username
@@ -53,7 +54,7 @@ module.exports = function adminRoutes(db) {
   });
 
   router.post('/students', (req, res) => {
-    const { username, displayName, password, grade, textbookVersion } = req.body;
+    const { username, displayName, password, grade, textbookVersion, textbookVolume } = req.body;
     if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
 
     const exists = db.prepare('SELECT id FROM students WHERE username = ?').get(username);
@@ -64,14 +65,15 @@ module.exports = function adminRoutes(db) {
     if (adminExists || parentExists) return res.status(409).json({ error: '该用户名已被其他角色使用' });
 
     const hash = bcrypt.hashSync(password, 10);
+    const vol = normalizeVolume(textbookVolume);
     const info = db.prepare(
-      'INSERT INTO students (username, display_name, password_hash, grade, textbook_version) VALUES (?, ?, ?, ?, ?)'
-    ).run(username, displayName || username, hash, grade || 3, textbookVersion || '人教版');
+      'INSERT INTO students (username, display_name, password_hash, grade, textbook_version, textbook_volume) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(username, displayName || username, hash, grade || 3, textbookVersion || '统编版', vol);
     res.json({ id: info.lastInsertRowid, message: '学生账户已创建' });
   });
 
   router.put('/students/:id', (req, res) => {
-    const { displayName, grade, textbookVersion, dailyLimit, parentId } = req.body;
+    const { displayName, grade, textbookVersion, textbookVolume, dailyLimit, parentId } = req.body;
     const student = db.prepare('SELECT id FROM students WHERE id = ?').get(req.params.id);
     if (!student) return res.status(404).json({ error: '学生不存在' });
 
@@ -81,6 +83,15 @@ module.exports = function adminRoutes(db) {
       db.prepare('UPDATE students SET grade = ? WHERE id = ?').run(grade, req.params.id);
     if (textbookVersion !== undefined)
       db.prepare('UPDATE students SET textbook_version = ? WHERE id = ?').run(textbookVersion, req.params.id);
+    if (textbookVolume !== undefined) {
+      if (!isValidVolume(textbookVolume)) {
+        return res.status(400).json({ error: '分册须为「上册」或「下册」' });
+      }
+      db.prepare('UPDATE students SET textbook_volume = ? WHERE id = ?').run(
+        normalizeVolume(textbookVolume),
+        req.params.id
+      );
+    }
     if (dailyLimit !== undefined)
       db.prepare('UPDATE students SET daily_limit = ? WHERE id = ?').run(dailyLimit, req.params.id);
     if (parentId !== undefined)
@@ -169,7 +180,7 @@ module.exports = function adminRoutes(db) {
     const { textbookVersion, grade, unit, unitTitle, words } = req.body;
     const info = db.prepare(
       'INSERT INTO word_lists (textbook_version, grade, unit, unit_title) VALUES (?, ?, ?, ?)'
-    ).run(textbookVersion || '人教版', grade, unit, unitTitle || '');
+    ).run(textbookVersion || '统编版', grade, unit, unitTitle || '');
 
     if (words?.length) {
       const insert = db.prepare('INSERT INTO words (word_list_id, word, pinyin, sort_order) VALUES (?, ?, ?, ?)');
@@ -183,16 +194,83 @@ module.exports = function adminRoutes(db) {
 
   // --- Recitation text management ---
   router.get('/recitation-texts', (req, res) => {
-    const texts = db.prepare('SELECT * FROM recitation_texts ORDER BY grade, unit, sort_order').all();
+    const texts = db
+      .prepare('SELECT * FROM recitation_texts ORDER BY grade, volume, unit, sort_order')
+      .all();
     res.json(texts);
   });
 
   router.post('/recitation-texts', (req, res) => {
-    const { textbookVersion, grade, unit, title, content } = req.body;
+    const { textbookVersion, grade, volume, unit, title, content, sortOrder } = req.body;
+    const vol = normalizeVolume(volume);
     const info = db.prepare(
-      'INSERT INTO recitation_texts (textbook_version, grade, unit, title, content) VALUES (?, ?, ?, ?, ?)'
-    ).run(textbookVersion || '人教版', grade, unit, title, content);
+      `INSERT INTO recitation_texts (textbook_version, grade, volume, unit, title, content, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      textbookVersion || '统编版',
+      grade,
+      vol,
+      unit,
+      title,
+      content,
+      sortOrder != null && !Number.isNaN(parseInt(sortOrder, 10)) ? parseInt(sortOrder, 10) : 0
+    );
     res.json({ id: info.lastInsertRowid, message: '课文已添加' });
+  });
+
+  /** 批量导入：body 为 { items: [...] }，每项字段与单条 POST 相同 */
+  router.post('/recitation-texts/batch', (req, res) => {
+    const items = Array.isArray(req.body?.items) ? req.body.items : null;
+    if (!items || items.length === 0) {
+      return res.status(400).json({ error: '请使用 JSON 提供 items 数组' });
+    }
+    if (items.length > 500) {
+      return res.status(400).json({ error: '单次最多导入 500 条' });
+    }
+
+    const insert = db.prepare(
+      `INSERT INTO recitation_texts (textbook_version, grade, volume, unit, title, content, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
+
+    try {
+      const ids = [];
+      const tx = db.transaction(() => {
+        items.forEach((row, i) => {
+          const g = parseInt(row.grade, 10);
+          const u = parseInt(row.unit, 10);
+          if (Number.isNaN(g) || g < 3 || g > 6) {
+            throw new Error(`第 ${i + 1} 条：年级须为 3–6`);
+          }
+          if (Number.isNaN(u) || u < 1) {
+            throw new Error(`第 ${i + 1} 条：单元无效`);
+          }
+          const title = row.title != null ? String(row.title).trim() : '';
+          const content = row.content != null ? String(row.content) : '';
+          if (!title) throw new Error(`第 ${i + 1} 条：标题不能为空`);
+          if (!content.trim()) throw new Error(`第 ${i + 1} 条：正文不能为空`);
+
+          let sort = row.sortOrder;
+          if (sort == null || Number.isNaN(parseInt(sort, 10))) sort = i;
+          else sort = parseInt(sort, 10);
+
+          const info = insert.run(
+            row.textbookVersion || row.textbook_version || '统编版',
+            g,
+            normalizeVolume(row.volume),
+            u,
+            title,
+            content,
+            sort
+          );
+          ids.push(info.lastInsertRowid);
+        });
+      });
+      tx();
+      res.json({ message: `已导入 ${ids.length} 条`, count: ids.length, ids });
+    } catch (e) {
+      res.status(400).json({ error: e.message || '导入失败' });
+    }
   });
 
   // --- Invitation codes (only bcrypt hash + SHA-256 lookup stored) ---

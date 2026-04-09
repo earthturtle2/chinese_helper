@@ -3,23 +3,30 @@ import { Link } from 'react-router-dom';
 import { api } from '../../api';
 import { useAuth } from '../../context/AuthContext';
 
-const TEXTBOOKS = ['人教版', '苏教版', '北师大版'];
+const TEXTBOOKS = ['统编版', '人教版', '苏教版', '北师大版'];
+const VOLUMES = ['上册', '下册'];
 
 export default function Recitation() {
   const { user, refreshUser } = useAuth();
   const [texts, setTexts] = useState([]);
   const [showAll, setShowAll] = useState(false);
   const [grade, setGrade] = useState(3);
-  const [textbookVersion, setTextbookVersion] = useState('人教版');
+  const [textbookVersion, setTextbookVersion] = useState('统编版');
+  const [textbookVolume, setTextbookVolume] = useState('上册');
 
   useEffect(() => {
     if (user?.grade) setGrade(user.grade);
     if (user?.textbookVersion) setTextbookVersion(user.textbookVersion);
-  }, [user?.grade, user?.textbookVersion]);
+    if (user?.textbookVolume) setTextbookVolume(user.textbookVolume);
+  }, [user?.grade, user?.textbookVersion, user?.textbookVolume]);
 
-  const persistPrefs = useCallback(async (nextGrade, nextTextbook) => {
+  const persistPrefs = useCallback(async (nextGrade, nextTextbook, nextVolume) => {
     try {
-      await api.updateStudentProfile({ grade: nextGrade, textbookVersion: nextTextbook });
+      await api.updateStudentProfile({
+        grade: nextGrade,
+        textbookVersion: nextTextbook,
+        textbookVolume: nextVolume,
+      });
       await refreshUser();
     } catch (e) {
       console.error(e);
@@ -27,10 +34,10 @@ export default function Recitation() {
   }, [refreshUser]);
 
   const loadTexts = useCallback(() => {
-    const params = { grade, textbookVersion };
+    const params = { grade, textbookVersion, textbookVolume };
     const fetcher = showAll ? api.getAllRecitationTexts : api.getRecitationTexts;
     fetcher(params).then(setTexts).catch(console.error);
-  }, [grade, textbookVersion, showAll]);
+  }, [grade, textbookVersion, textbookVolume, showAll]);
 
   useEffect(() => {
     loadTexts();
@@ -39,13 +46,19 @@ export default function Recitation() {
   const onGradeChange = async (e) => {
     const g = Number(e.target.value);
     setGrade(g);
-    await persistPrefs(g, textbookVersion);
+    await persistPrefs(g, textbookVersion, textbookVolume);
   };
 
   const onTextbookChange = async (e) => {
     const t = e.target.value;
     setTextbookVersion(t);
-    await persistPrefs(grade, t);
+    await persistPrefs(grade, t, textbookVolume);
+  };
+
+  const onVolumeChange = async (e) => {
+    const v = e.target.value;
+    setTextbookVolume(v);
+    await persistPrefs(grade, textbookVersion, v);
   };
 
   return (
@@ -69,6 +82,14 @@ export default function Recitation() {
               ))}
             </select>
           </label>
+          <label className="study-filter">
+            <span className="study-filter-label">分册</span>
+            <select value={textbookVolume} onChange={onVolumeChange}>
+              {VOLUMES.map(v => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+          </label>
           <label className="toggle-label study-filter-toggle">
             <input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} />
             显示所有年级
@@ -79,7 +100,7 @@ export default function Recitation() {
       <div className="card-list">
         {texts.map(t => (
           <Link key={t.id} to={`/student/recitation/${t.id}`} className="list-card">
-            <div className="list-grade">{t.grade}年级</div>
+            <div className="list-grade">{t.grade}年级 · {t.volume}</div>
             <div className="list-unit">第{t.unit}单元</div>
             <div className="list-title">{t.title}</div>
           </Link>

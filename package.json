@@ -9,6 +9,7 @@
     "client:dev": "cd client && npm run dev",
     "client:build": "cd client && npm run build",
     "db:init": "node server/db/init.js",
+    "seed:recitation": "node server/scripts/seed-tongbian-recitation.js",
     "deploy": "bash scripts/deploy.sh"
   },
   "keywords": [

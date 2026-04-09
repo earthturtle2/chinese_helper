@@ -131,6 +131,9 @@ export default function RecitationPractice() {
   return (
     <div className="page recitation-practice">
       <h2>{text.title}</h2>
+      <p className="hint-text">
+        {text.grade}年级 · {text.volume || '上册'} · 第{text.unit}单元
+      </p>
 
       {phase === 'preview' && (
         <div className="preview-section">
