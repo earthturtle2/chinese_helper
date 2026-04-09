@@ -3,6 +3,8 @@
  * 用法：
  *   node server/scripts/seed-tongbian-recitation.js           # 若已有统编版课文则跳过
  *   node server/scripts/seed-tongbian-recitation.js --replace # 先删除统编版再全量导入
+ * 若需在导入后按标题覆盖正文（勘误/补全文），可配置 server/data/recitation/content-updates.json 后执行：
+ *   npm run seed:recitation:apply-updates
  */
 const Database = require('better-sqlite3');
 const config = require('../config');

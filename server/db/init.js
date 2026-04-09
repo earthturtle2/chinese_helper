@@ -30,6 +30,42 @@ function migrateRecitationVolume(db) {
   }
 }
 
+function migrateLessonStudy(db) {
+  const sw = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='student_lesson_words'").get();
+  if (!sw) {
+    db.exec(`
+      CREATE TABLE student_lesson_words (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id          INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        recitation_text_id  INTEGER NOT NULL REFERENCES recitation_texts(id) ON DELETE CASCADE,
+        word                TEXT    NOT NULL,
+        pinyin              TEXT    NOT NULL DEFAULT '',
+        sort_order          INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS idx_student_lesson_words_lookup ON student_lesson_words(student_id, recitation_text_id);
+    `);
+  }
+  const legacyLw = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='lesson_words'").get();
+  if (legacyLw) {
+    db.exec('DROP TABLE lesson_words');
+  }
+  const ld = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='lesson_dictation_records'").get();
+  if (!ld) {
+    db.exec(`
+      CREATE TABLE lesson_dictation_records (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id          INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        recitation_text_id  INTEGER NOT NULL REFERENCES recitation_texts(id) ON DELETE CASCADE,
+        total_words         INTEGER NOT NULL DEFAULT 0,
+        correct             INTEGER NOT NULL DEFAULT 0,
+        duration_sec        INTEGER NOT NULL DEFAULT 0,
+        created_at          TEXT    DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_lesson_dictation_student ON lesson_dictation_records(student_id, created_at);
+    `);
+  }
+}
+
 function initDatabase() {
   ensureDir(DATA_DIR);
   ensureDir(config.uploadDir);
@@ -41,6 +77,7 @@ function initDatabase() {
   const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf-8');
   db.exec(schema);
   migrateRecitationVolume(db);
+  migrateLessonStudy(db);
 
   const adminExists = db.prepare('SELECT id FROM admins LIMIT 1').get();
   if (!adminExists) {

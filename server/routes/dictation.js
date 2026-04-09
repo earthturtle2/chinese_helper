@@ -6,6 +6,38 @@ module.exports = function dictationRoutes(db) {
   const router = Router();
   router.use(authenticate, requireRole('student'));
 
+  const upsertMistake = db.prepare(`
+    INSERT INTO mistakes (student_id, word, pinyin, mistake_type, mistake_count, next_review)
+    VALUES (?, ?, ?, ?, 1, datetime('now', '+1 day'))
+    ON CONFLICT(student_id, word) DO UPDATE SET
+      mistake_count = mistake_count + 1,
+      mistake_type = excluded.mistake_type,
+      last_tested = datetime('now'),
+      next_review = datetime('now', '+' || (CASE
+        WHEN mistake_count < 2 THEN '1' WHEN mistake_count < 4 THEN '2'
+        WHEN mistake_count < 6 THEN '4' ELSE '7' END) || ' day'),
+      mastered = 0
+  `);
+
+  const markCorrect = db.prepare(`
+    UPDATE mistakes SET last_tested = datetime('now'),
+      mastered = CASE WHEN mistake_count <= 1 THEN 1 ELSE mastered END
+    WHERE student_id = ? AND word = ?
+  `);
+
+  function applyMistakesFromResults(userId, results) {
+    const tx = db.transaction(() => {
+      for (const r of results) {
+        if (!r.correct) {
+          upsertMistake.run(userId, r.word, r.pinyin || '', r.mistakeType || 'unknown');
+        } else {
+          markCorrect.run(userId, r.word);
+        }
+      }
+    });
+    tx();
+  }
+
   router.get('/word-lists', (req, res) => {
     const student = db.prepare('SELECT grade, textbook_version FROM students WHERE id = ?').get(req.user.id);
     const grade =
@@ -39,46 +71,42 @@ module.exports = function dictationRoutes(db) {
   });
 
   router.post('/submit', (req, res) => {
-    const { wordListId, results, durationSec } = req.body;
-    if (!wordListId || !results?.length) return res.status(400).json({ error: '缺少答题数据' });
+    const { wordListId, recitationTextId, results, durationSec } = req.body;
+    if (!results?.length) return res.status(400).json({ error: '缺少答题数据' });
 
-    const correct = results.filter(r => r.correct).length;
+    const correct = results.filter((r) => r.correct).length;
+    const dur = durationSec || 0;
+
+    if (recitationTextId) {
+      const tid = parseInt(recitationTextId, 10);
+      if (Number.isNaN(tid)) return res.status(400).json({ error: '课文无效' });
+      const text = db.prepare('SELECT id FROM recitation_texts WHERE id = ?').get(tid);
+      if (!text) return res.status(404).json({ error: '课文不存在' });
+
+      db.prepare(
+        `INSERT INTO lesson_dictation_records (student_id, recitation_text_id, total_words, correct, duration_sec)
+         VALUES (?, ?, ?, ?, ?)`
+      ).run(req.user.id, tid, results.length, correct, dur);
+
+      applyMistakesFromResults(req.user.id, results);
+      recordUsage(db, req.user.id, Math.ceil(dur / 60));
+
+      return res.json({
+        message: '默写完成',
+        total: results.length,
+        correct,
+        accuracy: Math.round((correct / results.length) * 100),
+      });
+    }
+
+    if (!wordListId) return res.status(400).json({ error: '缺少词表或课文' });
 
     db.prepare(
       'INSERT INTO dictation_records (student_id, word_list_id, total_words, correct, duration_sec) VALUES (?, ?, ?, ?, ?)'
-    ).run(req.user.id, wordListId, results.length, correct, durationSec || 0);
+    ).run(req.user.id, wordListId, results.length, correct, dur);
 
-    const upsertMistake = db.prepare(`
-      INSERT INTO mistakes (student_id, word, pinyin, mistake_type, mistake_count, next_review)
-      VALUES (?, ?, ?, ?, 1, datetime('now', '+1 day'))
-      ON CONFLICT(student_id, word) DO UPDATE SET
-        mistake_count = mistake_count + 1,
-        mistake_type = excluded.mistake_type,
-        last_tested = datetime('now'),
-        next_review = datetime('now', '+' || (CASE
-          WHEN mistake_count < 2 THEN '1' WHEN mistake_count < 4 THEN '2'
-          WHEN mistake_count < 6 THEN '4' ELSE '7' END) || ' day'),
-        mastered = 0
-    `);
-
-    const markCorrect = db.prepare(`
-      UPDATE mistakes SET last_tested = datetime('now'),
-        mastered = CASE WHEN mistake_count <= 1 THEN 1 ELSE mastered END
-      WHERE student_id = ? AND word = ?
-    `);
-
-    const tx = db.transaction(() => {
-      for (const r of results) {
-        if (!r.correct) {
-          upsertMistake.run(req.user.id, r.word, r.pinyin || '', r.mistakeType || 'unknown');
-        } else {
-          markCorrect.run(req.user.id, r.word);
-        }
-      }
-    });
-    tx();
-
-    recordUsage(db, req.user.id, Math.ceil((durationSec || 0) / 60));
+    applyMistakesFromResults(req.user.id, results);
+    recordUsage(db, req.user.id, Math.ceil(dur / 60));
 
     res.json({
       message: '默写完成',

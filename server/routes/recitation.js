@@ -5,12 +5,27 @@ const { normalizeVolume } = require('../utils/volume');
 
 module.exports = function recitationRoutes(db) {
   const router = Router();
-  router.use(authenticate, requireRole('student'));
+  router.use(authenticate, requireRole('student', 'parent'));
+
+  /** 学生：本人；家长：query/body 带 studentId 且须为已绑定子女 */
+  function resolveTargetStudentId(req) {
+    if (req.user.role === 'student') return req.user.id;
+    const raw = req.query.studentId ?? req.body?.studentId;
+    if (raw == null || raw === '') return null;
+    const sid = parseInt(raw, 10);
+    if (Number.isNaN(sid)) return null;
+    const row = db.prepare('SELECT id FROM students WHERE id = ? AND parent_id = ?').get(sid, req.user.id);
+    return row ? sid : null;
+  }
 
   router.get('/texts', (req, res) => {
+    const sid = resolveTargetStudentId(req);
+    if (sid == null) {
+      return res.status(400).json({ error: '请指定学生（家长请在链接中带上孩子账号）' });
+    }
     const student = db.prepare(
       'SELECT grade, textbook_version, textbook_volume FROM students WHERE id = ?'
-    ).get(req.user.id);
+    ).get(sid);
     const grade =
       req.query.grade !== undefined && req.query.grade !== ''
         ? parseInt(req.query.grade, 10)
@@ -31,7 +46,11 @@ module.exports = function recitationRoutes(db) {
   });
 
   router.get('/texts/all', (req, res) => {
-    const student = db.prepare('SELECT textbook_version, textbook_volume FROM students WHERE id = ?').get(req.user.id);
+    const sid = resolveTargetStudentId(req);
+    if (sid == null) {
+      return res.status(400).json({ error: '请指定学生（家长请在链接中带上孩子账号）' });
+    }
+    const student = db.prepare('SELECT textbook_version, textbook_volume FROM students WHERE id = ?').get(sid);
     const textbookVersion = req.query.textbookVersion || student.textbook_version;
     const volume = normalizeVolume(
       req.query.volume !== undefined && req.query.volume !== '' ? req.query.volume : student.textbook_volume
@@ -51,25 +70,46 @@ module.exports = function recitationRoutes(db) {
   });
 
   router.post('/submit', (req, res) => {
-    const { textId, recognizedText, durationSec, usedHints } = req.body;
+    const sid = resolveTargetStudentId(req);
+    if (sid == null) {
+      return res.status(400).json({ error: '请指定学生（家长提交时请带上 studentId）' });
+    }
+
+    const { textId, recognizedText, durationSec, usedHints, selectedContent } = req.body;
     if (!textId || recognizedText === undefined) return res.status(400).json({ error: '缺少数据' });
 
     const original = db.prepare('SELECT title, content FROM recitation_texts WHERE id = ?').get(textId);
     if (!original) return res.status(404).json({ error: '课文不存在' });
 
-    const analysis = analyzeRecitation(original.content, recognizedText);
+    const fullText = String(original.content || '');
+    let segment = fullText;
+    if (selectedContent != null && String(selectedContent).trim() !== '') {
+      segment = String(selectedContent).trim();
+      if (!isSegmentOfFullText(fullText, segment)) {
+        return res.status(400).json({ error: '背诵内容须为课文中的连续片段' });
+      }
+    }
+    if (segment.replace(/\s/g, '').length < 4) {
+      return res.status(400).json({ error: '选段过短，请重新选择或背诵全文' });
+    }
+
+    const analysis = analyzeRecitation(segment, recognizedText);
+    const normFull = normalizeWs(fullText);
+    const normSeg = normalizeWs(segment);
+    const isPartial = normSeg.length < normFull.length || normSeg !== normFull;
+    const textTitle = isPartial ? `${original.title}（选段）` : original.title;
 
     db.prepare(`
       INSERT INTO recitation_records
         (student_id, text_title, original_text, recognized, accuracy, fluency, completeness, total_score, details_json, duration_sec, used_hints)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      req.user.id, original.title, original.content, recognizedText,
+      sid, textTitle, segment, recognizedText,
       analysis.accuracy, analysis.fluency, analysis.completeness, analysis.totalScore,
       JSON.stringify(analysis.details), durationSec || 0, usedHints || 0
     );
 
-    recordUsage(db, req.user.id, Math.ceil((durationSec || 0) / 60));
+    recordUsage(db, sid, Math.ceil((durationSec || 0) / 60));
 
     res.json({
       message: '背诵评估完成',
@@ -78,16 +118,24 @@ module.exports = function recitationRoutes(db) {
   });
 
   router.get('/history', (req, res) => {
+    const sid = resolveTargetStudentId(req);
+    if (sid == null) {
+      return res.status(400).json({ error: '请指定学生（家长请在链接中带上孩子账号）' });
+    }
     const records = db.prepare(
       'SELECT id, text_title, accuracy, fluency, completeness, total_score, duration_sec, used_hints, created_at FROM recitation_records WHERE student_id = ? ORDER BY created_at DESC LIMIT 50'
-    ).all(req.user.id);
+    ).all(sid);
     res.json(records);
   });
 
   router.get('/history/:id', (req, res) => {
+    const sid = resolveTargetStudentId(req);
+    if (sid == null) {
+      return res.status(400).json({ error: '请指定学生（家长请在链接中带上孩子账号）' });
+    }
     const record = db.prepare(
       'SELECT * FROM recitation_records WHERE id = ? AND student_id = ?'
-    ).get(req.params.id, req.user.id);
+    ).get(req.params.id, sid);
     if (!record) return res.status(404).json({ error: '记录不存在' });
     record.details_json = JSON.parse(record.details_json || '{}');
     res.json(record);
@@ -95,6 +143,21 @@ module.exports = function recitationRoutes(db) {
 
   return router;
 };
+
+function normalizeWs(s) {
+  return String(s || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t\u3000]+/g, ' ')
+    .replace(/\n+/g, '\n')
+    .trim();
+}
+
+function isSegmentOfFullText(full, segment) {
+  const f = normalizeWs(full);
+  const seg = normalizeWs(segment);
+  if (!seg) return false;
+  return f.includes(seg);
+}
 
 function analyzeRecitation(original, recognized) {
   const origChars = original.replace(/[，。！？、；：""''（）\s]/g, '');

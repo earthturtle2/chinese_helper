@@ -37,6 +37,11 @@ export default function StudentHome() {
           <h3>生词默写</h3>
           <p>听读音写汉字，巩固生字词</p>
         </Link>
+        <Link to="/student/lesson-study" className="module-card card-lesson">
+          <div className="module-icon">📚</div>
+          <h3>课文学习</h3>
+          <p>朗读全文，默写课内生词</p>
+        </Link>
         <Link to="/student/recitation" className="module-card card-recitation">
           <div className="module-icon">🎤</div>
           <h3>检查背诵</h3>

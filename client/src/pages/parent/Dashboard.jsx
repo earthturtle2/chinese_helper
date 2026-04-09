@@ -135,7 +135,15 @@ export default function ParentDashboard() {
             </div>
           </div>
 
-          <Link to={`/parent/weekly/${selectedChild.id}`} className="btn-secondary">查看本周详细报告</Link>
+          <div className="parent-quick-links">
+            <Link to={`/parent/children/${selectedChild.id}/lesson-study`} className="btn-secondary">
+              课文学习 · 管理课内生词
+            </Link>
+            <Link to={`/parent/children/${selectedChild.id}/recitation`} className="btn-secondary">
+              检查背诵 · 选段背诵
+            </Link>
+            <Link to={`/parent/weekly/${selectedChild.id}`} className="btn-secondary">查看本周详细报告</Link>
+          </div>
         </>
       )}
     </div>

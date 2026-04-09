@@ -12,6 +12,7 @@ const NAV_ITEMS = {
   student: [
     { path: '/student', label: '首页', icon: '🏠' },
     { path: '/student/dictation', label: '生词默写', icon: '✍️' },
+    { path: '/student/lesson-study', label: '课文学习', icon: '📚' },
     { path: '/student/recitation', label: '检查背诵', icon: '🎤' },
     { path: '/student/writing', label: '写作指导', icon: '📝' },
     { path: '/student/mistakes', label: '错词本', icon: '📖' },
@@ -41,16 +42,22 @@ export default function Layout() {
           <h1 className="app-title">语文小助手</h1>
         </div>
         <nav className="header-nav">
-          {navItems.map(item => (
+          {navItems.map(item => {
+            const isActive =
+              item.path === '/student'
+                ? location.pathname === '/student'
+                : location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+            return (
             <Link
               key={item.path}
               to={item.path}
-              className={`nav-link ${location.pathname === item.path ? 'active' : ''}`}
+              className={`nav-link ${isActive ? 'active' : ''}`}
             >
               <span className="nav-icon">{item.icon}</span>
               <span className="nav-label">{item.label}</span>
             </Link>
-          ))}
+          );
+          })}
         </nav>
         <div className="header-right">
           <span className="user-info">

@@ -61,6 +61,7 @@ function studyQuery(params) {
   if (params.grade != null && params.grade !== '') q.set('grade', String(params.grade));
   if (params.textbookVersion) q.set('textbookVersion', params.textbookVersion);
   if (params.textbookVolume) q.set('volume', params.textbookVolume);
+  if (params.studentId != null && params.studentId !== '') q.set('studentId', String(params.studentId));
   const s = q.toString();
   return s ? `?${s}` : '';
 }
@@ -111,8 +112,16 @@ export const api = {
   getAllRecitationTexts: (params) => request(`/recitation/texts/all${studyQuery(params)}`),
   getRecitationText: (id) => request(`/recitation/texts/${id}`),
   submitRecitation: (data) => request('/recitation/submit', { method: 'POST', body: JSON.stringify(data) }),
-  getRecitationHistory: () => request('/recitation/history'),
-  getRecitationDetail: (id) => request(`/recitation/history/${id}`),
+  getRecitationHistory: (params) => request(`/recitation/history${studyQuery(params)}`),
+  getRecitationDetail: (id, params) => request(`/recitation/history/${id}${studyQuery(params || {})}`),
+
+  // Lesson study（学生本人；家长代子女需在 params / body 中带 studentId）
+  getLessonStudyTexts: (params) => request(`/lesson-study/texts${studyQuery(params)}`),
+  getAllLessonStudyTexts: (params) => request(`/lesson-study/texts/all${studyQuery(params)}`),
+  getLessonStudyText: (id, params) => request(`/lesson-study/texts/${id}${studyQuery(params || {})}`),
+  addLessonWord: (textId, data) =>
+    request(`/lesson-study/texts/${textId}/words`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteLessonWord: (wordId) => request(`/lesson-study/words/${wordId}`, { method: 'DELETE' }),
 
   // Writing
   getTopics: () => request('/writing/topics'),

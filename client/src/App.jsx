@@ -13,10 +13,15 @@ import DictationPractice from './pages/student/DictationPractice';
 import MistakeBook from './pages/student/MistakeBook';
 import Recitation from './pages/student/Recitation';
 import RecitationPractice from './pages/student/RecitationPractice';
+import LessonStudy from './pages/student/LessonStudy';
+import LessonStudyDetail from './pages/student/LessonStudyDetail';
+import LessonDictationPractice from './pages/student/LessonDictationPractice';
 import Writing from './pages/student/Writing';
 import WritingSession from './pages/student/WritingSession';
 import ParentDashboard from './pages/parent/Dashboard';
 import ParentWeekly from './pages/parent/Weekly';
+import ParentLessonStudy from './pages/parent/ParentLessonStudy';
+import ParentRecitation from './pages/parent/ParentRecitation';
 import Layout from './components/Layout';
 
 function getHomePath(role) {
@@ -111,6 +116,15 @@ export default function App() {
       <Route path="/student/recitation/:textId" element={<StudentLayout />}>
         <Route index element={<RecitationPractice />} />
       </Route>
+      <Route path="/student/lesson-study" element={<StudentLayout />}>
+        <Route index element={<LessonStudy />} />
+      </Route>
+      <Route path="/student/lesson-study/:textId" element={<StudentLayout />}>
+        <Route index element={<LessonStudyDetail />} />
+      </Route>
+      <Route path="/student/lesson-study/:textId/dictation" element={<StudentLayout />}>
+        <Route index element={<LessonDictationPractice />} />
+      </Route>
       <Route path="/student/writing" element={<StudentLayout />}>
         <Route index element={<Writing />} />
       </Route>
@@ -123,6 +137,18 @@ export default function App() {
       </Route>
       <Route path="/parent/weekly/:studentId" element={<ParentLayout />}>
         <Route index element={<ParentWeekly />} />
+      </Route>
+      <Route path="/parent/children/:studentId/lesson-study" element={<ParentLayout />}>
+        <Route index element={<ParentLessonStudy />} />
+      </Route>
+      <Route path="/parent/children/:studentId/lesson-study/:textId" element={<ParentLayout />}>
+        <Route index element={<LessonStudyDetail />} />
+      </Route>
+      <Route path="/parent/children/:studentId/recitation" element={<ParentLayout />}>
+        <Route index element={<ParentRecitation />} />
+      </Route>
+      <Route path="/parent/children/:studentId/recitation/:textId" element={<ParentLayout />}>
+        <Route index element={<RecitationPractice />} />
       </Route>
 
       <Route path="*" element={<Navigate to={user ? getHomePath(user.role) : '/login'} replace />} />

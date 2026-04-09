@@ -7,7 +7,7 @@ module.exports = function parentRoutes(db) {
 
   router.get('/children', (req, res) => {
     const children = db.prepare(
-      'SELECT id, username, display_name, grade, textbook_version, daily_limit FROM students WHERE parent_id = ?'
+      'SELECT id, username, display_name, grade, textbook_version, textbook_volume, daily_limit FROM students WHERE parent_id = ?'
     ).all(req.user.id);
     res.json(children);
   });

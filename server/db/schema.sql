@@ -133,6 +133,31 @@ CREATE TABLE IF NOT EXISTS recitation_texts (
   sort_order       INTEGER NOT NULL DEFAULT 0
 );
 
+-- 课文默写生词（按学生维度，家长/学生自管）
+CREATE TABLE IF NOT EXISTS student_lesson_words (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id          INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  recitation_text_id  INTEGER NOT NULL REFERENCES recitation_texts(id) ON DELETE CASCADE,
+  word                TEXT    NOT NULL,
+  pinyin              TEXT    NOT NULL DEFAULT '',
+  sort_order          INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_student_lesson_words_lookup ON student_lesson_words(student_id, recitation_text_id);
+
+-- Dictation sessions tied to a lesson (no word_list row)
+CREATE TABLE IF NOT EXISTS lesson_dictation_records (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id          INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  recitation_text_id  INTEGER NOT NULL REFERENCES recitation_texts(id) ON DELETE CASCADE,
+  total_words         INTEGER NOT NULL DEFAULT 0,
+  correct             INTEGER NOT NULL DEFAULT 0,
+  duration_sec        INTEGER NOT NULL DEFAULT 0,
+  created_at          TEXT    DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_lesson_dictation_student ON lesson_dictation_records(student_id, created_at);
+
 -- Invitation codes (lookup_key = SHA-256 hex of normalized code; code_hash = bcrypt)
 CREATE TABLE IF NOT EXISTS invitation_codes (
   id                 INTEGER PRIMARY KEY AUTOINCREMENT,

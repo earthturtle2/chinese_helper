@@ -22,6 +22,7 @@ app.use('/api/admin', require('./routes/admin')(db));
 
 app.use('/api/dictation', authenticate, usageTracker(db), require('./routes/dictation')(db));
 app.use('/api/recitation', authenticate, usageTracker(db), require('./routes/recitation')(db));
+app.use('/api/lesson-study', authenticate, usageTracker(db), require('./routes/lessonStudy')(db));
 app.use('/api/writing', authenticate, usageTracker(db), require('./routes/writing')(db));
 app.use('/api/parent', require('./routes/parent')(db));
 

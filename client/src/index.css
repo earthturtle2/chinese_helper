@@ -335,6 +335,27 @@ button.login-gear-btn { appearance: none; }
   width: 100%;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
 }
+.modal-panel {
+  max-width: 520px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+}
+.lesson-admin-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+}
+.lesson-admin-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.lesson-admin-word { font-size: 20px; font-weight: 700; min-width: 2.5em; }
+.lesson-admin-py { color: var(--text-light); flex: 1; }
 .modal-title {
   margin: 0 0 20px;
   font-size: 22px;
@@ -508,6 +529,8 @@ button.login-gear-btn { appearance: none; }
 
 .card-dictation { border-color: #81C784; }
 .card-dictation:hover { border-color: var(--primary); }
+.card-lesson { border-color: #7E57C2; }
+.card-lesson:hover { border-color: #5E35B1; }
 .card-recitation { border-color: #64B5F6; }
 .card-recitation:hover { border-color: #1976D2; }
 .card-writing { border-color: #FFB74D; }
@@ -536,6 +559,64 @@ button.login-gear-btn { appearance: none; }
 .list-grade { font-size: 12px; color: var(--text-light); font-weight: 600; }
 .list-unit { font-size: 14px; color: var(--primary); font-weight: 700; }
 .list-title { font-size: 16px; font-weight: 700; margin-top: 4px; }
+
+/* Lesson study */
+.lesson-study-detail .back-link {
+  display: inline-block;
+  margin-bottom: 8px;
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+.lesson-study-detail .back-link:hover { text-decoration: underline; }
+.lesson-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.lesson-original-body {
+  white-space: pre-wrap;
+  line-height: 1.85;
+  font-size: 17px;
+  margin-top: 12px;
+}
+.lesson-words-section h3 { margin-bottom: 12px; }
+.lesson-word-chips {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.lesson-word-chips li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.lesson-word-chars { font-size: 22px; font-weight: 800; }
+.lesson-word-py { font-size: 13px; color: var(--text-light); margin-top: 4px; }
+.lesson-word-chips.editable li {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.lesson-word-remove { font-size: 13px; color: var(--danger); margin-left: 4px; }
+.lesson-word-form { margin-bottom: 12px; flex-wrap: wrap; }
+
+.parent-quick-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
 
 /* Dictation Practice */
 .dictation-practice { text-align: center; }
@@ -586,6 +667,10 @@ button.login-gear-btn { appearance: none; }
 
 /* Recitation */
 .original-text { background: var(--bg-card); padding: 24px; border-radius: var(--radius); font-size: 20px; line-height: 2; margin: 16px 0 24px; border: 2px solid var(--border); }
+.recitation-selectable { user-select: text; cursor: text; }
+.recitation-select-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+.recitation-segment-preview { white-space: pre-wrap; }
+.recitation-select-phase .hint-text strong { font-weight: 600; }
 .recording-indicator { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 24px; font-size: 18px; font-weight: 600; color: var(--danger); }
 .pulse-dot { width: 16px; height: 16px; background: var(--danger); border-radius: 50%; animation: pulse 1s infinite; }
 @keyframes pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.3); opacity: 0.6; } }
