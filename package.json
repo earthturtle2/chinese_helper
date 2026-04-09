@@ -8,6 +8,7 @@
     "start": "node server/index.js",
     "client:dev": "cd client && npm run dev",
     "client:build": "cd client && npm run build",
+    "fetch-models": "node scripts/fetch-crnn-assets.mjs",
     "db:init": "node server/db/init.js",
     "seed:recitation": "node server/scripts/seed-tongbian-recitation.js",
     "seed:recitation:apply-updates": "node server/scripts/apply-recitation-content-updates.js",

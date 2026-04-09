@@ -1,0 +1,2 @@
+# 体积较大，构建前执行 npm run fetch-models（根目录 scripts/fetch-crnn-assets.mjs）
+crnn_lite_lstm.onnx

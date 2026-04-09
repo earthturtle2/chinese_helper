@@ -641,10 +641,46 @@ button.login-gear-btn { appearance: none; }
 .progress-bar { height: 8px; background: var(--border); border-radius: 4px; margin-top: 8px; overflow: hidden; }
 .progress-fill { height: 100%; background: var(--primary); border-radius: 4px; transition: width 0.3s; }
 
-.practice-area { max-width: 500px; margin: 0 auto; }
+.practice-area { max-width: 560px; margin: 0 auto; }
 .pinyin-display { font-size: 36px; font-weight: 700; color: var(--primary); margin: 24px 0; }
 .char-input { font-size: 32px !important; text-align: center; padding: 16px !important; font-weight: 700; }
 .input-area { display: flex; flex-direction: column; gap: 16px; align-items: center; }
+
+/* 田字格默写 */
+.tianzige-input-area { width: 100%; align-items: stretch; }
+.tianzige-handwriting { width: 100%; margin: 0 auto; }
+.tianzige-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin: 16px 0 8px;
+}
+.tianzige-cell-wrap {
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  background: var(--bg-card);
+}
+.tianzige-cell-inner {
+  position: relative;
+  width: 120px;
+  height: 120px;
+}
+.tianzige-grid-canvas,
+.tianzige-ink-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  border-radius: 4px;
+}
+.tianzige-grid-canvas { z-index: 0; pointer-events: none; }
+.tianzige-ink-canvas { z-index: 1; cursor: crosshair; }
+.tianzige-error { color: var(--danger); }
+.tianzige-canvas { display: block; border-radius: 4px; }
+.tianzige-toolbar { display: flex; justify-content: center; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tianzige-clear { font-weight: 600; }
+.tianzige-hint { font-size: 14px; margin: 4px 0 10px; line-height: 1.5; }
 
 .answer-reveal { margin-top: 24px; }
 .correct-word { font-size: 72px; font-weight: 800; color: var(--primary); margin: 16px 0; }

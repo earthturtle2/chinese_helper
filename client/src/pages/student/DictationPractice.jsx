@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../api';
+import TianZiGeHandwriting from '../../components/TianZiGeHandwriting';
 
 export default function DictationPractice() {
   const { listId } = useParams();
@@ -9,11 +10,11 @@ export default function DictationPractice() {
   const [current, setCurrent] = useState(0);
   const [results, setResults] = useState([]);
   const [phase, setPhase] = useState('loading');
-  const [input, setInput] = useState('');
   const [showAnswer, setShowAnswer] = useState(false);
   const [summary, setSummary] = useState(null);
+  const [busy, setBusy] = useState(false);
   const startTime = useRef(Date.now());
-  const inputRef = useRef(null);
+  const hwRef = useRef(null);
 
   useEffect(() => {
     api.getWords(listId).then(w => {
@@ -35,17 +36,27 @@ export default function DictationPractice() {
   useEffect(() => {
     if (phase === 'practice' && word) {
       speakPinyin();
-      inputRef.current?.focus();
     }
   }, [current, phase, word, speakPinyin]);
 
-  const handleSubmit = () => {
-    if (!input.trim()) return;
-    const correct = input.trim() === word.word;
+  const handleSubmit = async () => {
+    if (!word || busy) return;
+    setBusy(true);
+    let text = '';
+    try {
+      text = (await hwRef.current?.recognize?.())?.trim() ?? '';
+    } catch (e) {
+      console.error(e);
+      setBusy(false);
+      return;
+    }
+    setBusy(false);
+    if (!text) return;
+    const correct = text === word.word;
     const result = {
       word: word.word,
       pinyin: word.pinyin,
-      input: input.trim(),
+      input: text,
       correct,
       mistakeType: correct ? null : 'unknown',
     };
@@ -59,7 +70,6 @@ export default function DictationPractice() {
   };
 
   const goNext = () => {
-    setInput('');
     setShowAnswer(false);
     if (current + 1 >= words.length) {
       finishPractice();
@@ -72,10 +82,6 @@ export default function DictationPractice() {
     setPhase('submitting');
     const durationSec = Math.round((Date.now() - startTime.current) / 1000);
     const allResults = [...results];
-    if (input.trim() && !showAnswer) {
-      const correct = input.trim() === word?.word;
-      allResults.push({ word: word.word, pinyin: word.pinyin, input: input.trim(), correct, mistakeType: correct ? null : 'unknown' });
-    }
     try {
       const data = await api.submitDictation({ wordListId: parseInt(listId), results: allResults, durationSec });
       setSummary(data);
@@ -133,18 +139,13 @@ export default function DictationPractice() {
             </button>
           </div>
         ) : (
-          <div className="input-area">
-            <input
-              ref={inputRef}
-              className="char-input"
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-              placeholder="在这里写汉字"
-              maxLength={4}
-              autoComplete="off"
+          <div className="input-area tianzige-input-area">
+            <TianZiGeHandwriting
+              key={`${listId}-${current}`}
+              ref={hwRef}
+              charCount={Math.max(1, word?.word?.length || 1)}
             />
-            <button className="btn-primary" onClick={handleSubmit} disabled={!input.trim()}>确认</button>
+            <button className="btn-primary" onClick={handleSubmit} disabled={busy}>{busy ? '识别中…' : '确认'}</button>
           </div>
         )}
       </div>
