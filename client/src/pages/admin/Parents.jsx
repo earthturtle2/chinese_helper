@@ -7,7 +7,10 @@ export default function AdminParents() {
   const [form, setForm] = useState({ username: '', password: '', phone: '' });
   const [error, setError] = useState('');
 
-  const load = () => api.getParents().then(setParents).catch(console.error);
+  const load = () =>
+    api.getParents()
+      .then(data => setParents(Array.isArray(data) ? data : []))
+      .catch(console.error);
   useEffect(load, []);
 
   const handleCreate = async (e) => {

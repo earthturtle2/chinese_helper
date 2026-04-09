@@ -61,7 +61,7 @@ export default function Layout() {
         </div>
       </header>
       <main className="app-main">
-        <Outlet />
+        <Outlet key={location.pathname} />
       </main>
     </div>
   );

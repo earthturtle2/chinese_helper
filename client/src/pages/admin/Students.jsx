@@ -9,8 +9,12 @@ export default function AdminStudents() {
   const [error, setError] = useState('');
 
   const load = () => {
-    api.getStudents().then(setStudents).catch(console.error);
-    api.getParents().then(setParents).catch(console.error);
+    api.getStudents()
+      .then(data => setStudents(Array.isArray(data) ? data : []))
+      .catch(console.error);
+    api.getParents()
+      .then(data => setParents(Array.isArray(data) ? data : []))
+      .catch(console.error);
   };
   useEffect(load, []);
 
@@ -88,9 +92,14 @@ export default function AdminStudents() {
               <td>{s.grade}年级</td>
               <td>{s.textbook_version}</td>
               <td>
-                <select value={s.parent_id || ''} onChange={e => handleBind(s.id, e.target.value)}>
+                <select
+                  value={s.parent_id != null && s.parent_id !== '' ? String(s.parent_id) : ''}
+                  onChange={e => handleBind(s.id, e.target.value)}
+                >
                   <option value="">未绑定</option>
-                  {parents.map(p => <option key={p.id} value={p.id}>{p.username}</option>)}
+                  {parents.map(p => (
+                    <option key={p.id} value={String(p.id)}>{p.username}</option>
+                  ))}
                 </select>
               </td>
               <td className="actions">
