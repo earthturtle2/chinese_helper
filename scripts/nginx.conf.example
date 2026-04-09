@@ -5,7 +5,8 @@ server {
 }
 
 server {
-    listen 443 ssl http2;
+    listen 443 ssl;
+    http2 on;
     server_name chinese.itorange.online;
 
     ssl_certificate     /etc/letsencrypt/live/chinese.itorange.online/fullchain.pem;
