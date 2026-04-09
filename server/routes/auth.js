@@ -1,9 +1,25 @@
 const { Router } = require('express');
 const bcrypt = require('bcryptjs');
 const { generateToken } = require('../middleware/auth');
+const { normalizeInviteCode, inviteLookupKey, verifyInviteCode } = require('../utils/inviteCode');
 
 module.exports = function authRoutes(db) {
   const router = Router();
+
+  router.post('/admin/login', (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ error: '请输入用户名和密码' });
+    }
+
+    const user = db.prepare('SELECT id, username, password_hash FROM admins WHERE username = ?').get(username);
+    if (user && bcrypt.compareSync(password, user.password_hash)) {
+      const token = generateToken({ id: user.id, username: user.username, role: 'admin' });
+      return res.json({ token, role: 'admin', username: user.username });
+    }
+
+    return res.status(401).json({ error: '用户名或密码错误' });
+  });
 
   router.post('/login', (req, res) => {
     const { username, password } = req.body;
@@ -11,17 +27,14 @@ module.exports = function authRoutes(db) {
       return res.status(400).json({ error: '请输入用户名和密码' });
     }
 
-    let user = db.prepare('SELECT id, username, password_hash FROM admins WHERE username = ?').get(username);
-    if (user && bcrypt.compareSync(password, user.password_hash)) {
-      const token = generateToken({ id: user.id, username: user.username, role: 'admin' });
-      return res.json({ token, role: 'admin', username: user.username });
-    }
-
-    user = db.prepare('SELECT id, username, display_name, password_hash, grade, textbook_version FROM students WHERE username = ?').get(username);
+    let user = db.prepare(
+      'SELECT id, username, display_name, password_hash, grade, textbook_version FROM students WHERE username = ?'
+    ).get(username);
     if (user && bcrypt.compareSync(password, user.password_hash)) {
       const token = generateToken({ id: user.id, username: user.username, role: 'student', grade: user.grade });
       return res.json({
-        token, role: 'student',
+        token,
+        role: 'student',
         username: user.username,
         displayName: user.display_name,
         grade: user.grade,
@@ -42,6 +55,80 @@ module.exports = function authRoutes(db) {
     }
 
     return res.status(401).json({ error: '用户名或密码错误' });
+  });
+
+  router.post('/register', (req, res) => {
+    const { username, password, displayName, inviteCode, grade, textbookVersion } = req.body;
+    if (!username || !password || !inviteCode) {
+      return res.status(400).json({ error: '请填写用户名、密码和邀请码' });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ error: '密码至少 8 位' });
+    }
+
+    const normalized = normalizeInviteCode(inviteCode);
+    if (normalized.length < 8) {
+      return res.status(400).json({ error: '邀请码无效' });
+    }
+
+    const lookupKey = inviteLookupKey(normalized);
+    const row = db.prepare('SELECT * FROM invitation_codes WHERE lookup_key = ?').get(lookupKey);
+    if (!row) {
+      return res.status(400).json({ error: '邀请码无效' });
+    }
+
+    const now = new Date().toISOString();
+    if (row.expires_at && row.expires_at < now) {
+      return res.status(400).json({ error: '邀请码已过期' });
+    }
+    if (row.used_count >= row.max_uses) {
+      return res.status(400).json({ error: '邀请码已用完' });
+    }
+
+    if (!verifyInviteCode(normalized, row.code_hash)) {
+      return res.status(400).json({ error: '邀请码无效' });
+    }
+
+    const exists = db.prepare('SELECT id FROM students WHERE username = ?').get(username);
+    if (exists) return res.status(409).json({ error: '该用户名已存在' });
+
+    const adminExists = db.prepare('SELECT id FROM admins WHERE username = ?').get(username);
+    const parentExists = db.prepare('SELECT id FROM parents WHERE username = ?').get(username);
+    if (adminExists || parentExists) return res.status(409).json({ error: '该用户名已被其他角色使用' });
+
+    const hash = bcrypt.hashSync(password, 10);
+    const g = grade ?? 3;
+    if (g < 3 || g > 6) {
+      return res.status(400).json({ error: '年级必须在 3–6 之间' });
+    }
+
+    const tx = db.transaction(() => {
+      db.prepare(
+        'INSERT INTO students (username, display_name, password_hash, grade, textbook_version) VALUES (?, ?, ?, ?, ?)'
+      ).run(username, displayName || username, hash, g, textbookVersion || '人教版');
+      db.prepare('UPDATE invitation_codes SET used_count = used_count + 1 WHERE id = ?').run(row.id);
+    });
+    tx();
+
+    const student = db.prepare(
+      'SELECT id, username, display_name, grade, textbook_version FROM students WHERE username = ?'
+    ).get(username);
+
+    const token = generateToken({
+      id: student.id,
+      username: student.username,
+      role: 'student',
+      grade: student.grade,
+    });
+
+    return res.json({
+      token,
+      role: 'student',
+      username: student.username,
+      displayName: student.display_name,
+      grade: student.grade,
+      textbookVersion: student.textbook_version,
+    });
   });
 
   router.post('/change-password', (req, res) => {

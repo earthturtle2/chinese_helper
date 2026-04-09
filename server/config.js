@@ -1,14 +1,33 @@
 require('dotenv').config();
+const crypto = require('crypto');
+
+function requireJwtSecret() {
+  const s = process.env.JWT_SECRET;
+  const isProd = process.env.NODE_ENV === 'production';
+  if (isProd && (!s || s.length < 32)) {
+    throw new Error(
+      'JWT_SECRET must be set in environment to a random string of at least 32 characters.'
+    );
+  }
+  if (s && s.length >= 32) return s;
+  if (s) return s;
+  const ephemeral = crypto.randomBytes(32).toString('hex');
+  console.warn(
+    '[config] JWT_SECRET not set; using an ephemeral secret for this process only (tokens invalid after restart). Set JWT_SECRET in .env for stable local dev.'
+  );
+  return ephemeral;
+}
 
 module.exports = {
   port: parseInt(process.env.PORT, 10) || 3000,
   nodeEnv: process.env.NODE_ENV || 'development',
-  jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-me',
+  jwtSecret: requireJwtSecret(),
   jwtExpiresIn: '7d',
 
+  /** Initial admin is created only when both env vars are set (see db/init.js). */
   admin: {
-    username: process.env.ADMIN_USERNAME || 'admin',
-    password: process.env.ADMIN_PASSWORD || 'admin123',
+    username: process.env.ADMIN_USERNAME || '',
+    password: process.env.ADMIN_PASSWORD || '',
   },
 
   deepseek: {

@@ -1,6 +1,22 @@
 const { Router } = require('express');
 const bcrypt = require('bcryptjs');
 const { authenticate, requireRole } = require('../middleware/auth');
+const {
+  generatePlainInviteCode,
+  normalizeInviteCode,
+  inviteLookupKey,
+  hashInviteCodeForStorage,
+} = require('../utils/inviteCode');
+
+function maskSettings(settings) {
+  const out = { ...settings };
+  for (const k of Object.keys(out)) {
+    if (/_key$/i.test(k) || /_secret$/i.test(k) || /password/i.test(k)) {
+      if (out[k]) out[k] = '********';
+    }
+  }
+  return out;
+}
 
 module.exports = function adminRoutes(db) {
   const router = Router();
@@ -11,12 +27,15 @@ module.exports = function adminRoutes(db) {
     const rows = db.prepare('SELECT key, value FROM settings').all();
     const settings = {};
     rows.forEach(r => { settings[r.key] = r.value; });
-    res.json(settings);
+    res.json(maskSettings(settings));
   });
 
   router.put('/settings', (req, res) => {
     const { key, value } = req.body;
     if (!key) return res.status(400).json({ error: '缺少 key' });
+    if (value === '********') {
+      return res.status(400).json({ error: '请填写新值，不能使用占位符' });
+    }
     db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?')
       .run(key, String(value), String(value));
     res.json({ message: '设置已更新' });
@@ -159,6 +178,61 @@ module.exports = function adminRoutes(db) {
       'INSERT INTO recitation_texts (textbook_version, grade, unit, title, content) VALUES (?, ?, ?, ?, ?)'
     ).run(textbookVersion || '人教版', grade, unit, title, content);
     res.json({ id: info.lastInsertRowid, message: '课文已添加' });
+  });
+
+  // --- Invitation codes (only bcrypt hash + SHA-256 lookup stored) ---
+  router.get('/invitation-codes', (req, res) => {
+    const rows = db.prepare(`
+      SELECT id, note, max_uses, used_count, expires_at, created_at, created_by_admin_id
+      FROM invitation_codes ORDER BY created_at DESC
+    `).all();
+    res.json(rows);
+  });
+
+  router.post('/invitation-codes', (req, res) => {
+    const { note, maxUses, expiresInDays } = req.body;
+    const maxUsesNum = Math.max(1, parseInt(maxUses, 10) || 1);
+    let expiresAt = null;
+    if (expiresInDays != null && expiresInDays !== '') {
+      const d = parseInt(expiresInDays, 10);
+      if (!Number.isNaN(d) && d > 0) {
+        const t = new Date();
+        t.setDate(t.getDate() + d);
+        expiresAt = t.toISOString();
+      }
+    }
+
+    let plain;
+    let lookupKey;
+    let codeHash;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      plain = generatePlainInviteCode();
+      const normalized = normalizeInviteCode(plain);
+      lookupKey = inviteLookupKey(normalized);
+      const clash = db.prepare('SELECT id FROM invitation_codes WHERE lookup_key = ?').get(lookupKey);
+      if (!clash) {
+        codeHash = hashInviteCodeForStorage(normalized);
+        break;
+      }
+    }
+    if (!codeHash) return res.status(500).json({ error: '无法生成唯一邀请码，请重试' });
+
+    const info = db.prepare(`
+      INSERT INTO invitation_codes (lookup_key, code_hash, note, max_uses, created_by_admin_id, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(lookupKey, codeHash, note || '', maxUsesNum, req.user.id, expiresAt);
+
+    res.json({
+      id: info.lastInsertRowid,
+      code: plain,
+      message: '邀请码仅显示一次，请妥善保存',
+    });
+  });
+
+  router.delete('/invitation-codes/:id', (req, res) => {
+    const r = db.prepare('DELETE FROM invitation_codes WHERE id = ?').run(req.params.id);
+    if (r.changes === 0) return res.status(404).json({ error: '记录不存在' });
+    res.json({ message: '已删除' });
   });
 
   // --- Dashboard stats ---

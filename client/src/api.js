@@ -16,7 +16,8 @@ async function request(path, options = {}) {
     if (res.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      const path = typeof window !== 'undefined' ? window.location.pathname || '' : '';
+      window.location.href = path.startsWith('/admin') ? '/admin/login' : '/login';
     }
     throw new Error(data.error || '请求失败');
   }
@@ -25,6 +26,8 @@ async function request(path, options = {}) {
 
 export const api = {
   login: (username, password) => request('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  adminLogin: (username, password) => request('/auth/admin/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  register: (payload) => request('/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
   me: () => request('/me'),
 
   // Admin
@@ -44,6 +47,10 @@ export const api = {
   createWordList: (data) => request('/admin/word-lists', { method: 'POST', body: JSON.stringify(data) }),
   getAdminRecitationTexts: () => request('/admin/recitation-texts'),
   createRecitationText: (data) => request('/admin/recitation-texts', { method: 'POST', body: JSON.stringify(data) }),
+
+  getInvitationCodes: () => request('/admin/invitation-codes'),
+  createInvitationCode: (data) => request('/admin/invitation-codes', { method: 'POST', body: JSON.stringify(data || {}) }),
+  deleteInvitationCode: (id) => request(`/admin/invitation-codes/${id}`, { method: 'DELETE' }),
 
   // Dictation
   getWordLists: () => request('/dictation/word-lists'),

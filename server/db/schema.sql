@@ -131,6 +131,19 @@ CREATE TABLE IF NOT EXISTS recitation_texts (
   sort_order       INTEGER NOT NULL DEFAULT 0
 );
 
+-- Invitation codes (lookup_key = SHA-256 hex of normalized code; code_hash = bcrypt)
+CREATE TABLE IF NOT EXISTS invitation_codes (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  lookup_key         TEXT    NOT NULL UNIQUE,
+  code_hash          TEXT    NOT NULL,
+  note               TEXT    DEFAULT '',
+  max_uses           INTEGER NOT NULL DEFAULT 1 CHECK(max_uses >= 1),
+  used_count         INTEGER NOT NULL DEFAULT 0 CHECK(used_count >= 0),
+  created_by_admin_id INTEGER REFERENCES admins(id) ON DELETE SET NULL,
+  expires_at         TEXT,
+  created_at         TEXT    DEFAULT (datetime('now'))
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_students_parent ON students(parent_id);
 CREATE INDEX IF NOT EXISTS idx_mistakes_student ON mistakes(student_id, mastered);

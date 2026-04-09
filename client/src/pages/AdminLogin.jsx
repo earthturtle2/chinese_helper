@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-export default function Login() {
+export default function AdminLogin() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { loginAdmin } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -15,9 +15,8 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      const user = await login(username, password);
-      const paths = { admin: '/admin', student: '/student', parent: '/parent' };
-      navigate(paths[user.role] || '/');
+      await loginAdmin(username, password);
+      navigate('/admin');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -26,45 +25,40 @@ export default function Login() {
   };
 
   return (
-    <div className="login-page">
-      <div className="login-top-actions-row">
-        <Link to="/register" className="login-register-link">学生注册</Link>
-        <Link to="/admin/login" className="login-gear-btn" title="管理员登录" aria-label="管理员登录">
-          <span className="login-gear-icon" aria-hidden>⚙</span>
-        </Link>
-      </div>
-      <div className="login-card">
+    <div className="login-page login-page-has-back">
+      <Link to="/login" className="login-back-link">← 学生 / 家长登录</Link>
+      <div className="login-card login-card-admin">
         <div className="login-header">
-          <h1>语文小助手</h1>
-          <p>学生 / 家长登录</p>
+          <h1>管理员登录</h1>
+          <p>后台管理入口</p>
         </div>
         <form onSubmit={handleSubmit} className="login-form">
           {error && <div className="error-msg">{error}</div>}
           <div className="form-group">
-            <label htmlFor="username">用户名</label>
+            <label htmlFor="admin-username">用户名</label>
             <input
-              id="username"
+              id="admin-username"
               type="text"
               value={username}
               onChange={e => setUsername(e.target.value)}
-              placeholder="请输入用户名"
+              placeholder="管理员用户名"
               autoFocus
               required
             />
           </div>
           <div className="form-group">
-            <label htmlFor="password">密码</label>
+            <label htmlFor="admin-password">密码</label>
             <input
-              id="password"
+              id="admin-password"
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              placeholder="请输入密码"
+              placeholder="密码"
               required
             />
           </div>
           <button type="submit" className="btn-primary btn-full" disabled={loading}>
-            {loading ? '登录中...' : '登录'}
+            {loading ? '登录中...' : '进入管理后台'}
           </button>
         </form>
       </div>

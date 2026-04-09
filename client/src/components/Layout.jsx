@@ -7,6 +7,7 @@ const NAV_ITEMS = {
     { path: '/admin/students', label: '学生管理', icon: '👨‍🎓' },
     { path: '/admin/parents', label: '家长管理', icon: '👨‍👩‍👧' },
     { path: '/admin/content', label: '内容管理', icon: '📚' },
+    { path: '/admin/invitations', label: '邀请码', icon: '🎫' },
   ],
   student: [
     { path: '/student', label: '首页', icon: '🏠' },

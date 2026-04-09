@@ -23,12 +23,16 @@ function initDatabase() {
 
   const adminExists = db.prepare('SELECT id FROM admins LIMIT 1').get();
   if (!adminExists) {
-    const hash = bcrypt.hashSync(config.admin.password, 10);
-    db.prepare('INSERT INTO admins (username, password_hash) VALUES (?, ?)').run(
-      config.admin.username,
-      hash
-    );
-    console.log(`[DB] Admin account created: ${config.admin.username}`);
+    const { username, password } = config.admin;
+    if (username && password) {
+      const hash = bcrypt.hashSync(password, 10);
+      db.prepare('INSERT INTO admins (username, password_hash) VALUES (?, ?)').run(username, hash);
+      console.log(`[DB] Admin account created from ADMIN_USERNAME env: ${username}`);
+    } else {
+      console.warn(
+        '[DB] No admin exists and ADMIN_USERNAME/ADMIN_PASSWORD not both set; create an admin via env and restart, or use an existing database.'
+      );
+    }
   }
 
   const parentEnabled = db.prepare("SELECT value FROM settings WHERE key = 'parent_feature_enabled'").get();
