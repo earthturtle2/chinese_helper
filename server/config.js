@@ -19,7 +19,8 @@ function requireJwtSecret() {
 }
 
 module.exports = {
-  port: parseInt(process.env.PORT, 10) || 3000,
+  /** Override with env `PORT` (e.g. 3001 if 3000 is taken). */
+  port: parseInt(process.env.PORT, 10) || 3001,
   nodeEnv: process.env.NODE_ENV || 'development',
   jwtSecret: requireJwtSecret(),
   jwtExpiresIn: '7d',

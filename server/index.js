@@ -14,10 +14,8 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
-app.use(express.static(clientDist));
 
-app.use('/audio', express.static(path.join(__dirname, '..', 'data', 'audio')));
-
+// API routes before static files so /api/* is never handled by SPA or static assets
 app.use('/api/auth', require('./routes/auth')(db));
 app.use('/api/admin', require('./routes/admin')(db));
 
@@ -56,6 +54,10 @@ app.get('/api/me', authenticate, (req, res) => {
 
   res.json({ id, username, role });
 });
+
+app.use('/audio', express.static(path.join(__dirname, '..', 'data', 'audio')));
+
+app.use(express.static(clientDist));
 
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) {
