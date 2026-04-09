@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import AdminLoginModal from '../components/AdminLoginModal';
 
 export default function Register() {
   const [username, setUsername] = useState('');
@@ -9,6 +10,7 @@ export default function Register() {
   const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [adminModalOpen, setAdminModalOpen] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
@@ -33,11 +35,18 @@ export default function Register() {
 
   return (
     <div className="login-page login-page-register">
+      <AdminLoginModal open={adminModalOpen} onClose={() => setAdminModalOpen(false)} />
       <div className="login-top-bar">
         <Link to="/login" className="login-back-inline">← 返回登录</Link>
-        <Link to="/admin/login" className="login-gear-btn" title="管理员登录" aria-label="管理员登录">
+        <button
+          type="button"
+          className="login-gear-btn"
+          title="管理员登录"
+          aria-label="管理员登录"
+          onClick={() => setAdminModalOpen(true)}
+        >
           <span className="login-gear-icon" aria-hidden>⚙</span>
-        </Link>
+        </button>
       </div>
       <div className="login-card login-card-wide">
         <div className="login-header">

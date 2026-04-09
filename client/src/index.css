@@ -240,7 +240,11 @@ h3 { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
   font-size: 22px;
   line-height: 1;
   transition: all 0.2s;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
 }
+button.login-gear-btn { appearance: none; }
 .login-gear-btn:hover {
   border-color: var(--primary);
   color: var(--primary);
@@ -313,6 +317,39 @@ h3 { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
   gap: 12px;
   font-size: 14px;
 }
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal-card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 28px 32px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+}
+.modal-title {
+  margin: 0 0 20px;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--primary);
+  text-align: center;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
 .invite-code-plain {
   font-size: 18px;
   font-weight: 800;

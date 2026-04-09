@@ -1,21 +1,32 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import AdminLoginModal from '../components/AdminLoginModal';
 
 export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [adminModalOpen, setAdminModalOpen] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('admin') !== '1') return;
+    setAdminModalOpen(true);
+    params.delete('admin');
+    const qs = params.toString();
+    navigate(`${window.location.pathname}${qs ? `?${qs}` : ''}`, { replace: true });
+  }, [navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const user = await login(username, password);
+      const user = await login(username.trim(), password);
       const paths = { admin: '/admin', student: '/student', parent: '/parent' };
       navigate(paths[user.role] || '/');
     } catch (err) {
@@ -27,11 +38,18 @@ export default function Login() {
 
   return (
     <div className="login-page">
+      <AdminLoginModal open={adminModalOpen} onClose={() => setAdminModalOpen(false)} />
       <div className="login-top-actions-row">
         <Link to="/register" className="login-register-link">学生注册</Link>
-        <Link to="/admin/login" className="login-gear-btn" title="管理员登录" aria-label="管理员登录">
+        <button
+          type="button"
+          className="login-gear-btn"
+          title="管理员登录"
+          aria-label="管理员登录"
+          onClick={() => setAdminModalOpen(true)}
+        >
           <span className="login-gear-icon" aria-hidden>⚙</span>
-        </Link>
+        </button>
       </div>
       <div className="login-card">
         <div className="login-header">

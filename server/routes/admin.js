@@ -95,10 +95,13 @@ module.exports = function adminRoutes(db) {
   });
 
   router.put('/students/:id/reset-password', (req, res) => {
-    const { password } = req.body;
+    const raw = req.body.password;
+    const password = typeof raw === 'string' ? raw.trim() : raw;
     if (!password) return res.status(400).json({ error: '密码不能为空' });
+    const studentId = parseInt(req.params.id, 10);
+    if (Number.isNaN(studentId)) return res.status(400).json({ error: '无效的学生 ID' });
     const hash = bcrypt.hashSync(password, 10);
-    db.prepare('UPDATE students SET password_hash = ? WHERE id = ?').run(hash, req.params.id);
+    db.prepare('UPDATE students SET password_hash = ? WHERE id = ?').run(hash, studentId);
     res.json({ message: '密码已重置' });
   });
 
@@ -137,10 +140,13 @@ module.exports = function adminRoutes(db) {
   });
 
   router.put('/parents/:id/reset-password', (req, res) => {
-    const { password } = req.body;
+    const raw = req.body.password;
+    const password = typeof raw === 'string' ? raw.trim() : raw;
     if (!password) return res.status(400).json({ error: '密码不能为空' });
+    const parentId = parseInt(req.params.id, 10);
+    if (Number.isNaN(parentId)) return res.status(400).json({ error: '无效的家长 ID' });
     const hash = bcrypt.hashSync(password, 10);
-    const r = db.prepare('UPDATE parents SET password_hash = ? WHERE id = ?').run(hash, req.params.id);
+    const r = db.prepare('UPDATE parents SET password_hash = ? WHERE id = ?').run(hash, parentId);
     if (r.changes === 0) return res.status(404).json({ error: '家长不存在' });
     res.json({ message: '密码已更新' });
   });

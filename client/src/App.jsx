@@ -1,7 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import Login from './pages/Login';
-import AdminLogin from './pages/AdminLogin';
 import Register from './pages/Register';
 import AdminDashboard from './pages/admin/Dashboard';
 import AdminStudents from './pages/admin/Students';
@@ -33,7 +32,7 @@ function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="loading">加载中...</div>;
   if (!user) {
-    const loginPath = roles?.length === 1 && roles[0] === 'admin' ? '/admin/login' : '/login';
+    const loginPath = roles?.length === 1 && roles[0] === 'admin' ? '/login?admin=1' : '/login';
     return <Navigate to={loginPath} replace />;
   }
   if (roles && !roles.includes(user.role)) {
@@ -75,7 +74,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to={getHomePath(user.role)} replace /> : <Login />} />
-      <Route path="/admin/login" element={user?.role === 'admin' ? <Navigate to="/admin" replace /> : <AdminLogin />} />
+      <Route path="/admin/login" element={<Navigate to={user?.role === 'admin' ? '/admin' : '/login?admin=1'} replace />} />
       <Route path="/register" element={user ? <Navigate to={getHomePath(user.role)} replace /> : <Register />} />
 
       <Route path="/admin" element={<AdminLayout />}>

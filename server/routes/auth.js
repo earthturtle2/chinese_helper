@@ -2,13 +2,15 @@ const { Router } = require('express');
 const bcrypt = require('bcryptjs');
 const { generateToken } = require('../middleware/auth');
 const { normalizeInviteCode, inviteLookupKey, verifyInviteCode } = require('../utils/inviteCode');
+const { isParentFeatureEnabled } = require('../utils/settings');
 
 module.exports = function authRoutes(db) {
   const router = Router();
 
   router.post('/admin/login', (req, res) => {
-    const { username, password } = req.body;
-    if (!username || !password) {
+    const username = String(req.body.username || '').trim();
+    const password = req.body.password;
+    if (!username || password == null || password === '') {
       return res.status(400).json({ error: '请输入用户名和密码' });
     }
 
@@ -22,8 +24,9 @@ module.exports = function authRoutes(db) {
   });
 
   router.post('/login', (req, res) => {
-    const { username, password } = req.body;
-    if (!username || !password) {
+    const username = String(req.body.username || '').trim();
+    const password = req.body.password;
+    if (!username || password == null || password === '') {
       return res.status(400).json({ error: '请输入用户名和密码' });
     }
 
@@ -42,8 +45,7 @@ module.exports = function authRoutes(db) {
       });
     }
 
-    const parentEnabled = db.prepare("SELECT value FROM settings WHERE key = 'parent_feature_enabled'").get();
-    if (parentEnabled?.value === 'true') {
+    if (isParentFeatureEnabled(db)) {
       user = db.prepare('SELECT id, username, password_hash FROM parents WHERE username = ?').get(username);
       if (user && bcrypt.compareSync(password, user.password_hash)) {
         const children = db.prepare(
@@ -58,7 +60,9 @@ module.exports = function authRoutes(db) {
   });
 
   router.post('/register', (req, res) => {
-    const { username, password, displayName, inviteCode } = req.body;
+    const username = String(req.body.username || '').trim();
+    const displayName = req.body.displayName != null ? String(req.body.displayName).trim() : '';
+    const { password, inviteCode } = req.body;
     if (!username || !password || !inviteCode) {
       return res.status(400).json({ error: '请填写用户名、密码和邀请码' });
     }

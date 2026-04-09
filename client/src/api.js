@@ -48,7 +48,7 @@ async function request(path, options = {}) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       const pathname = typeof window !== 'undefined' ? window.location.pathname || '' : '';
-      window.location.href = pathname.startsWith('/admin') ? '/admin/login' : '/login';
+      window.location.href = pathname.startsWith('/admin') ? '/login?admin=1' : '/login';
     }
     throw new Error(data.error || '请求失败');
   }
