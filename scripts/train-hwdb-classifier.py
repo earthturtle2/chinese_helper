@@ -17,6 +17,9 @@ Usage:
         --test-dir   ./data/HWDB1.1tst_gnt \
         --output-dir ./client/public/models \
         --epochs 15 --quantize
+
+2GB 内存服务器：全量载入会 OOM，请加 --max-train-samples / --max-test-samples，
+并减小 --batch-size（如 16），后台示例见项目 README 或 DESIGN.md。
 """
 
 import argparse, json, math, os, struct, sys, time
@@ -50,17 +53,26 @@ def iter_gnt(filepath):
             yield char, bitmap
 
 
-def load_gnt_dir(directory):
-    """Read every *.gnt in *directory*, return (images, labels)."""
+def load_gnt_dir(directory, max_samples=None):
+    """Read every *.gnt in *directory*, return (images, labels).
+
+    If max_samples is set, stop after that many images (顺序靠前，非均匀抽样；
+    小内存机器请用此参数，全量约需 8GB+ RAM）。
+    """
     images, labels = [], []
     gnt_files = sorted(Path(directory).glob("*.gnt"))
     if not gnt_files:
         gnt_files = sorted(Path(directory).glob("*.GNT"))
     print(f"  Found {len(gnt_files)} GNT files in {directory}")
+    if max_samples:
+        print(f"  (limit: at most {max_samples} samples)")
     for i, gf in enumerate(gnt_files, 1):
         for char, bmp in iter_gnt(gf):
             images.append(bmp)
             labels.append(char)
+            if max_samples and len(images) >= max_samples:
+                print(f"    Stopped at {len(images)} samples (max_samples reached)")
+                return images, labels
         if i % 20 == 0 or i == len(gnt_files):
             print(f"    [{i}/{len(gnt_files)}] loaded {len(images)} samples so far")
     return images, labels
@@ -231,6 +243,29 @@ def main():
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--quantize", action="store_true", help="Quantize ONNX model (uint8)")
     parser.add_argument("--device", default="auto", help="cpu / cuda / auto")
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=0,
+        help="DataLoader workers (2 核小机建议 0；多核可设 2–4)",
+    )
+    parser.add_argument(
+        "--pin-memory",
+        action="store_true",
+        help="DataLoader pin_memory (仅 CUDA 有意义，CPU 训练勿开)",
+    )
+    parser.add_argument(
+        "--max-train-samples",
+        type=int,
+        default=None,
+        help="最多载入训练样本数（省内存；不设则全量，约需 8GB+ RAM）",
+    )
+    parser.add_argument(
+        "--max-test-samples",
+        type=int,
+        default=None,
+        help="最多载入测试样本数（默认同上逻辑；可与训练上限配合）",
+    )
     args = parser.parse_args()
 
     if args.device == "auto":
@@ -240,11 +275,11 @@ def main():
     print(f"Device: {device}")
 
     print("Loading training data...")
-    trn_images, trn_labels = load_gnt_dir(args.train_dir)
+    trn_images, trn_labels = load_gnt_dir(args.train_dir, max_samples=args.max_train_samples)
     print(f"  Training: {len(trn_images)} samples")
 
     print("Loading test data...")
-    tst_images, tst_labels = load_gnt_dir(args.test_dir)
+    tst_images, tst_labels = load_gnt_dir(args.test_dir, max_samples=args.max_test_samples)
     print(f"  Test: {len(tst_images)} samples")
 
     all_chars = sorted(set(trn_labels))
@@ -252,11 +287,27 @@ def main():
     char2idx = {c: i for i, c in enumerate(all_chars)}
 
     trn_ds = HwdbDataset(trn_images, trn_labels, char2idx, augment=True)
-    tst_ds = HwdbDataset(tst_images, tst_labels, char2idx, augment=False)
-    trn_loader = DataLoader(trn_ds, batch_size=args.batch_size, shuffle=True,
-                            num_workers=4, pin_memory=True)
-    tst_loader = DataLoader(tst_ds, batch_size=args.batch_size, shuffle=False,
-                            num_workers=4, pin_memory=True)
+    # 训练子集时，测试集中可能出现未见过的字，需过滤以免 KeyError
+    tst_f_images, tst_f_labels = [], []
+    for img, lab in zip(tst_images, tst_labels):
+        if lab in char2idx:
+            tst_f_images.append(img)
+            tst_f_labels.append(lab)
+    if len(tst_f_labels) < len(tst_labels):
+        print(f"  Test: {len(tst_labels) - len(tst_f_labels)} samples skipped (char not in train set)")
+    if not tst_f_labels:
+        print("ERROR: no test samples left after filtering; increase --max-train-samples or use full train set.")
+        sys.exit(1)
+    tst_ds = HwdbDataset(tst_f_images, tst_f_labels, char2idx, augment=False)
+    dl_common = dict(
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        pin_memory=args.pin_memory,
+    )
+    if args.num_workers > 0:
+        dl_common["persistent_workers"] = True
+    trn_loader = DataLoader(trn_ds, shuffle=True, **dl_common)
+    tst_loader = DataLoader(tst_ds, shuffle=False, **dl_common)
 
     num_classes = len(all_chars)
     model = HwdbNet(num_classes).to(device)
