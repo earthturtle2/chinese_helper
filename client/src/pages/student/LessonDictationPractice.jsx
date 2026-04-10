@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../api';
 import TianZiGeHandwriting from '../../components/TianZiGeHandwriting';
 import { speakChineseWord } from '../../utils/speechChinese';
+import { useTtsEngine } from '../../hooks/useTtsEngine';
+import TtsEngineBadge from '../../components/TtsEngineBadge';
 
 export default function LessonDictationPractice() {
   const { textId } = useParams();
@@ -17,6 +19,7 @@ export default function LessonDictationPractice() {
   const startTime = useRef(Date.now());
   const hwRef = useRef(null);
   const resultsRef = useRef([]);
+  const ttsEngine = useTtsEngine();
 
   useEffect(() => {
     resultsRef.current = results;
@@ -170,6 +173,10 @@ export default function LessonDictationPractice() {
           <div className="progress-fill" style={{ width: `${((current + 1) / words.length) * 100}%` }} />
         </div>
       </div>
+
+      <p className="dictation-tts-line">
+        <TtsEngineBadge compact loading={ttsEngine.loading} piperAvailable={ttsEngine.piperAvailable} />
+      </p>
 
       <div className="practice-area">
         <div className="pinyin-display">{word?.pinyin}</div>

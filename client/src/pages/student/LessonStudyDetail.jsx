@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../../api';
 import { enqueueChineseLongText, stopChineseSpeech } from '../../utils/speechChinese';
+import { useTtsEngine } from '../../hooks/useTtsEngine';
+import TtsEngineBadge from '../../components/TtsEngineBadge';
 
 export default function LessonStudyDetail() {
   const { textId, studentId: parentStudentId } = useParams();
@@ -17,6 +19,7 @@ export default function LessonStudyDetail() {
   const [reading, setReading] = useState(false);
   const [wordForm, setWordForm] = useState({ word: '' });
   const [wordMsg, setWordMsg] = useState('');
+  const ttsEngine = useTtsEngine();
 
   const load = useCallback(() => {
     api
@@ -122,9 +125,16 @@ export default function LessonStudyDetail() {
         >
           {reading ? '⏹ 停止朗读' : '🔊 朗读全文'}
         </button>
-        <span className="hint-text lesson-toolbar-hint">
-          若服务端已配置 Piper 本地朗读，将优先使用；否则使用浏览器语音。长课文会自动分段播放。
-        </span>
+        <div className="lesson-toolbar-tts">
+          <TtsEngineBadge loading={ttsEngine.loading} piperAvailable={ttsEngine.piperAvailable} />
+          <p className="hint-text lesson-toolbar-hint">
+            {ttsEngine.loading
+              ? '正在检测朗读方式…'
+              : ttsEngine.piperAvailable
+                ? '将优先使用 Piper 合成全文（长文按句分段）。Piper 对多音字、声调的预测有限，可能与教材不完全一致；更贴近系统发音时可请管理员停用服务端 Piper。'
+                : '将使用浏览器调用的系统中文语音；长课文会自动分段。可在系统设置中更换语音。'}
+          </p>
+        </div>
       </div>
 
       <div className="form-card lesson-original">

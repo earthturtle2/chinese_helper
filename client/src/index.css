@@ -586,14 +586,44 @@ button.login-gear-btn { appearance: none; }
 .lesson-toolbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   margin-bottom: 16px;
+}
+.lesson-toolbar-tts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 100%;
+  align-items: flex-start;
 }
 .lesson-toolbar-hint {
   flex: 1 1 100%;
   font-size: 13px;
   line-height: 1.5;
+  margin: 0;
+}
+.tts-engine-badge {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+.tts-engine-loading {
+  background: var(--border);
+  color: var(--text-light);
+}
+.tts-engine-piper {
+  background: #E8F5E9;
+  color: #2E7D32;
+  border: 1px solid #A5D6A7;
+}
+.tts-engine-browser {
+  background: #E3F2FD;
+  color: #1565C0;
+  border: 1px solid #90CAF9;
 }
 .lesson-original-body {
   white-space: pre-wrap;
@@ -653,7 +683,15 @@ button.login-gear-btn { appearance: none; }
   text-align: center;
   padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
 }
-.practice-header { margin-bottom: 24px; }
+.practice-header { margin-bottom: 12px; }
+.dictation-tts-line {
+  margin: 0 auto 20px;
+  max-width: min(560px, 100%);
+  text-align: center;
+}
+.dictation-tts-line .tts-engine-badge {
+  vertical-align: middle;
+}
 .progress { font-size: 18px; font-weight: 700; color: var(--primary); }
 .progress-bar { height: 8px; background: var(--border); border-radius: 4px; margin-top: 8px; overflow: hidden; }
 .progress-fill { height: 100%; background: var(--primary); border-radius: 4px; transition: width 0.3s; }
