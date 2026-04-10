@@ -67,7 +67,7 @@ module.exports = {
   piperBin: (process.env.PIPER_BIN || '').trim(),
   piperModel: process.env.PIPER_MODEL
     ? path.resolve(process.cwd(), process.env.PIPER_MODEL.trim())
-    : path.join(__dirname, '..', 'models', 'piper', 'zh_CN-huayan-medium.onnx'),
+    : path.join(__dirname, '..', 'models', 'piper', 'zh_CN-xiao_ya-medium.onnx'),
   /** Piper 韵律：略大于 1 时语速稍慢、停顿略舒展（可选，未设置则不传参） */
   piperLengthScale: (() => {
     const raw = process.env.PIPER_LENGTH_SCALE;

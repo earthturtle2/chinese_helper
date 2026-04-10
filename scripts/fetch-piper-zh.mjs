@@ -1,5 +1,5 @@
 /**
- * 下载 Piper 中文女声（华燕 medium）模型到 models/piper/。
+ * 下载 Piper 中文女声（小雅 xiao_ya medium）模型到 models/piper/。
  * 仍需从 https://github.com/rhasspy/piper/releases 下载对应平台的 piper 可执行文件，并设置 .env 中 PIPER_BIN。
  *
  * 网络超时 / 无法访问 huggingface.co 时：
@@ -16,7 +16,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.join(__dirname, '..');
 dotenv.config({ path: path.join(projectRoot, '.env') });
 
-const files = ['zh_CN-huayan-medium.onnx', 'zh_CN-huayan-medium.onnx.json'];
+const files = ['zh_CN-xiao_ya-medium.onnx', 'zh_CN-xiao_ya-medium.onnx.json'];
 
 function hfBase() {
   const raw = (process.env.HF_ENDPOINT || process.env.PIPER_HF_ENDPOINT || 'https://huggingface.co').trim();
@@ -24,7 +24,7 @@ function hfBase() {
 }
 
 function buildUrl(baseHost, filename) {
-  return `${baseHost}/rhasspy/piper-voices/resolve/main/zh/zh_CN/huayan/medium/${filename}`;
+  return `${baseHost}/rhasspy/piper-voices/resolve/main/zh/zh_CN/xiao_ya/medium/${filename}`;
 }
 
 function sleep(ms) {
