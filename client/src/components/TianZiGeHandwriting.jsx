@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { recognizeInkCanvas } from '../utils/crnnHandwriting';
+import { recognizeMultiCellInk } from '../utils/handwritingRecognition';
 
 const INK_COLOR = '#1a1a1a';
 const GRID_COLOR = '#b8c5b0';
@@ -114,7 +114,7 @@ const TianZiGeHandwriting = forwardRef(function TianZiGeHandwriting({ charCount,
     const { x, y } = getLocalCoords(canvas, e);
     drawingRef.current = true;
     ctx.strokeStyle = INK_COLOR;
-    ctx.lineWidth = Math.max(2, cellSizeRef.current * 0.02);
+    ctx.lineWidth = Math.max(4, cellSizeRef.current * 0.05);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.beginPath();
@@ -153,19 +153,9 @@ const TianZiGeHandwriting = forwardRef(function TianZiGeHandwriting({ charCount,
   const recognize = async () => {
     setModelError(null);
     setStatus('识别中…');
-    const parts = [];
     try {
-      for (let i = 0; i < count; i++) {
-        const ink = inkRefs.current[i];
-        if (!ink) {
-          parts.push('');
-          continue;
-        }
-        const raw = await recognizeInkCanvas(ink);
-        const ch = raw ? [...raw][0] : '';
-        parts.push(ch || '');
-      }
-      const text = parts.join('');
+      const canvases = inkRefs.current.slice(0, count);
+      const text = await recognizeMultiCellInk(canvases);
       setStatus(text ? `识别结果：${text}` : '未识别到字迹，请重写');
       return text;
     } catch (e) {
