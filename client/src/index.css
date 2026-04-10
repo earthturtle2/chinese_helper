@@ -24,6 +24,8 @@ body {
   font-size: 16px;
   line-height: 1.6;
   min-height: 100vh;
+  padding-left: env(safe-area-inset-left, 0);
+  padding-right: env(safe-area-inset-right, 0);
 }
 
 /* Layout */
@@ -95,7 +97,14 @@ body {
 }
 .btn-logout:hover { border-color: var(--danger); color: var(--danger); }
 
-.app-main { flex: 1; padding: 24px; max-width: 1200px; margin: 0 auto; width: 100%; }
+.app-main {
+  flex: 1;
+  padding: 24px;
+  padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
 
 /* Page basics */
 .page { animation: fadeIn 0.3s ease; }
@@ -581,6 +590,11 @@ button.login-gear-btn { appearance: none; }
   gap: 12px;
   margin-bottom: 16px;
 }
+.lesson-toolbar-hint {
+  flex: 1 1 100%;
+  font-size: 13px;
+  line-height: 1.5;
+}
 .lesson-original-body {
   white-space: pre-wrap;
   line-height: 1.85;
@@ -635,16 +649,40 @@ button.login-gear-btn { appearance: none; }
 }
 
 /* Dictation Practice */
-.dictation-practice { text-align: center; }
+.dictation-practice {
+  text-align: center;
+  padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+}
 .practice-header { margin-bottom: 24px; }
 .progress { font-size: 18px; font-weight: 700; color: var(--primary); }
 .progress-bar { height: 8px; background: var(--border); border-radius: 4px; margin-top: 8px; overflow: hidden; }
 .progress-fill { height: 100%; background: var(--primary); border-radius: 4px; transition: width 0.3s; }
 
-.practice-area { max-width: 560px; margin: 0 auto; }
-.pinyin-display { font-size: 36px; font-weight: 700; color: var(--primary); margin: 24px 0; }
+.practice-area { max-width: min(560px, 100%); margin: 0 auto; padding: 0 4px; }
+.pinyin-display {
+  font-size: clamp(28px, 8vw, 36px);
+  font-weight: 700;
+  color: var(--primary);
+  margin: 16px 0 20px;
+  line-height: 1.25;
+  word-break: break-all;
+}
 .char-input { font-size: 32px !important; text-align: center; padding: 16px !important; font-weight: 700; }
 .input-area { display: flex; flex-direction: column; gap: 16px; align-items: center; }
+
+.dictation-practice .btn-primary,
+.dictation-practice .btn-secondary {
+  min-height: 48px;
+  padding: 12px 28px;
+  touch-action: manipulation;
+  width: min(100%, 400px);
+}
+.dictation-practice .btn-speak {
+  min-height: 48px;
+  padding: 12px 24px;
+  touch-action: manipulation;
+  width: min(100%, 320px);
+}
 
 /* 田字格默写 */
 .tianzige-input-area { width: 100%; align-items: stretch; }
@@ -663,8 +701,7 @@ button.login-gear-btn { appearance: none; }
 }
 .tianzige-cell-inner {
   position: relative;
-  width: 120px;
-  height: 120px;
+  margin: 0 auto;
 }
 .tianzige-grid-canvas,
 .tianzige-ink-canvas {
@@ -675,7 +712,14 @@ button.login-gear-btn { appearance: none; }
   border-radius: 4px;
 }
 .tianzige-grid-canvas { z-index: 0; pointer-events: none; }
-.tianzige-ink-canvas { z-index: 1; cursor: crosshair; }
+.tianzige-ink-canvas {
+  z-index: 1;
+  cursor: crosshair;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
 .tianzige-error { color: var(--danger); }
 .tianzige-canvas { display: block; border-radius: 4px; }
 .tianzige-toolbar { display: flex; justify-content: center; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -683,7 +727,13 @@ button.login-gear-btn { appearance: none; }
 .tianzige-hint { font-size: 14px; margin: 4px 0 10px; line-height: 1.5; }
 
 .answer-reveal { margin-top: 24px; }
-.correct-word { font-size: 72px; font-weight: 800; color: var(--primary); margin: 16px 0; }
+.correct-word {
+  font-size: clamp(48px, 15vw, 72px);
+  font-weight: 800;
+  color: var(--primary);
+  margin: 16px 0;
+  line-height: 1.1;
+}
 .hint-text { color: var(--text-light); font-size: 15px; margin-bottom: 16px; }
 
 /* Dictation Result */
@@ -856,20 +906,68 @@ button.login-gear-btn { appearance: none; }
 .usage-min { font-size: 11px; color: var(--primary); font-weight: 600; }
 
 /* Responsive */
+@media (max-width: 1024px) {
+  .study-filters {
+    gap: 10px 12px;
+  }
+  .study-filter {
+    flex: 1 1 calc(50% - 8px);
+    min-width: 140px;
+  }
+  .study-filter select {
+    flex: 1;
+    min-width: 0;
+  }
+  .card-list {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+  .lesson-original-body {
+    font-size: 16px;
+    line-height: 1.9;
+  }
+}
+
 @media (max-width: 768px) {
   .app-header { padding: 0 12px; gap: 8px; }
   .app-title { font-size: 18px; }
   .nav-label { display: none; }
   .nav-link { padding: 8px 10px; }
-  .app-main { padding: 16px; }
+  .app-main { padding: 16px; padding-bottom: max(16px, env(safe-area-inset-bottom, 0px)); }
   .module-grid { grid-template-columns: repeat(2, 1fr); }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .form-row { flex-direction: column; }
   .data-table { font-size: 13px; }
   .data-table th, .data-table td { padding: 8px 10px; }
+
+  .page-header-study .study-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .study-filter {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+  .study-filter-toggle {
+    margin-left: 0;
+  }
+  .lesson-toolbar .btn-primary {
+    width: 100%;
+    min-height: 48px;
+  }
+  .original-text {
+    font-size: 17px;
+    padding: 16px;
+    line-height: 1.85;
+  }
+  .dictation-subsection-title {
+    font-size: 17px;
+  }
 }
 
 @media (max-width: 480px) {
   .module-grid { grid-template-columns: 1fr; }
   .header-right .user-info { display: none; }
+  .card-list {
+    grid-template-columns: 1fr;
+  }
 }

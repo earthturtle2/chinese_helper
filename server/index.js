@@ -19,6 +19,7 @@ const clientDist = path.join(__dirname, '..', 'client', 'dist');
 // API routes before static files so /api/* is never handled by SPA or static assets
 app.use('/api/auth', require('./routes/auth')(db));
 app.use('/api/admin', require('./routes/admin')(db));
+app.use('/api/tts', require('./routes/tts')());
 
 app.use('/api/dictation', authenticate, usageTracker(db), require('./routes/dictation')(db));
 app.use('/api/recitation', authenticate, usageTracker(db), require('./routes/recitation')(db));

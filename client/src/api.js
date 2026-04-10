@@ -74,6 +74,45 @@ export const api = {
   me: () => request('/me'),
   updateStudentProfile: (body) => request('/student/profile', { method: 'PUT', body: JSON.stringify(body) }),
 
+  /** Piper TTS 状态（无需登录） */
+  getTtsStatus: async () => {
+    const url = `${BASE}/tts/status`;
+    const res = await fetch(url);
+    const text = await res.text();
+    return parseJsonBody(text, url);
+  },
+
+  /** 朗读为 WAV（需登录；未配置 Piper 时返回 503） */
+  ttsSpeak: async (text) => {
+    const token = getToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const url = `${BASE}/tts/speak`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) {
+      let data = {};
+      try {
+        data = parseJsonBody(await res.text(), url);
+      } catch {
+        /* ignore */
+      }
+      if (res.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        const pathname = typeof window !== 'undefined' ? window.location.pathname || '' : '';
+        window.location.href = pathname.startsWith('/admin') ? '/login?admin=1' : '/login';
+      }
+      const err = new Error(data.error || `朗读请求失败（${res.status}）`);
+      err.status = res.status;
+      throw err;
+    }
+    return res.blob();
+  },
+
   // Admin
   getSettings: () => request('/admin/settings'),
   updateSetting: (key, value) => request('/admin/settings', { method: 'PUT', body: JSON.stringify({ key, value }) }),

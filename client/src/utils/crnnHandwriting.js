@@ -174,8 +174,18 @@ export async function recognizeInkCanvas(inkCanvas) {
   let T;
   let C;
   if (d.length === 3) {
-    T = d[1];
-    C = d[2];
+    const [a, b, c] = d;
+    // onnx 导出常为 [T, batch, C]，如 chineseocr_lite: [64, 1, 5531]；也可能是 [1, T, C]
+    if (b === 1 && a > 1) {
+      T = a;
+      C = c;
+    } else if (a === 1) {
+      T = b;
+      C = c;
+    } else {
+      T = b;
+      C = c;
+    }
   } else if (d.length === 2) {
     T = d[0];
     C = d[1];

@@ -201,7 +201,7 @@ export default function RecitationPractice() {
       {phase === 'select' && (
         <div className="preview-section recitation-select-phase">
           <p className="hint-text">
-            在下方课文中<strong>用鼠标拖选一段</strong>，点「使用选中内容」；或点「背诵全文」。
+            在下方课文中<strong>用手指或鼠标拖选一段</strong>，点「使用选中内容」；或点「背诵全文」。
           </p>
           <div ref={articleRef} className="original-text recitation-selectable">
             {text.content}

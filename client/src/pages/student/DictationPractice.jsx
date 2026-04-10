@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../api';
 import TianZiGeHandwriting from '../../components/TianZiGeHandwriting';
+import { speakChineseWord } from '../../utils/speechChinese';
 
 export default function DictationPractice() {
   const { listId } = useParams();
@@ -27,10 +28,7 @@ export default function DictationPractice() {
 
   const speakPinyin = useCallback(() => {
     if (!word) return;
-    const utterance = new SpeechSynthesisUtterance(word.word);
-    utterance.lang = 'zh-CN';
-    utterance.rate = 0.8;
-    speechSynthesis.speak(utterance);
+    void speakChineseWord(word.word, { rate: 0.8, cancelBefore: true });
   }, [word]);
 
   useEffect(() => {

@@ -1,5 +1,6 @@
 require('dotenv').config();
 const crypto = require('crypto');
+const path = require('path');
 
 function requireJwtSecret() {
   const s = process.env.JWT_SECRET;
@@ -44,4 +45,13 @@ module.exports = {
 
   uploadDir: './data/uploads',
   audioDir: './data/audio',
+
+  /**
+   * Piper 本地 TTS（可选）。需下载中文模型到 models/piper/，并设置 PIPER_BIN 指向 piper 可执行文件。
+   * 见 npm run fetch-piper 与 .env.example。
+   */
+  piperBin: (process.env.PIPER_BIN || '').trim(),
+  piperModel: process.env.PIPER_MODEL
+    ? path.resolve(process.cwd(), process.env.PIPER_MODEL.trim())
+    : path.join(__dirname, '..', 'models', 'piper', 'zh_CN-huayan-medium.onnx'),
 };

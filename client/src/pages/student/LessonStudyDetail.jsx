@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../../api';
+import { enqueueChineseLongText, stopChineseSpeech } from '../../utils/speechChinese';
 
 export default function LessonStudyDetail() {
   const { textId, studentId: parentStudentId } = useParams();
@@ -14,7 +15,6 @@ export default function LessonStudyDetail() {
 
   const [data, setData] = useState(null);
   const [reading, setReading] = useState(false);
-  const utterRef = useRef(null);
   const [wordForm, setWordForm] = useState({ word: '' });
   const [wordMsg, setWordMsg] = useState('');
 
@@ -30,27 +30,24 @@ export default function LessonStudyDetail() {
   }, [load]);
 
   const stopReading = useCallback(() => {
-    speechSynthesis.cancel();
+    stopChineseSpeech();
     setReading(false);
-    utterRef.current = null;
   }, []);
 
   const readFullText = useCallback(() => {
     if (!data?.content) return;
-    stopReading();
-    const u = new SpeechSynthesisUtterance(data.content);
-    u.lang = 'zh-CN';
-    u.rate = 0.92;
-    u.onend = () => setReading(false);
-    u.onerror = () => setReading(false);
-    utterRef.current = u;
+    stopChineseSpeech();
     setReading(true);
-    speechSynthesis.speak(u);
+    void enqueueChineseLongText(data.content, {
+      rate: 0.92,
+      onComplete: () => setReading(false),
+      onError: () => setReading(false),
+    });
   }, [data?.content, stopReading]);
 
   useEffect(() => {
     return () => {
-      speechSynthesis.cancel();
+      stopChineseSpeech();
     };
   }, []);
 
@@ -75,7 +72,7 @@ export default function LessonStudyDetail() {
     const sel = window.getSelection();
     const t = sel && sel.toString ? sel.toString().trim() : '';
     if (!t) {
-      setWordMsg('请先在课文正文中用鼠标拖选要添加的字或词');
+      setWordMsg('请先在课文正文中用手指或鼠标拖选要添加的字或词');
       return;
     }
     const cleaned = t.replace(/[^\u4e00-\u9fff]/g, '');
@@ -125,12 +122,14 @@ export default function LessonStudyDetail() {
         >
           {reading ? '⏹ 停止朗读' : '🔊 朗读全文'}
         </button>
-        <span className="hint-text">使用浏览器语音合成朗读，可在系统设置中更换中文语音</span>
+        <span className="hint-text lesson-toolbar-hint">
+          若服务端已配置 Piper 本地朗读，将优先使用；否则使用浏览器语音。长课文会自动分段播放。
+        </span>
       </div>
 
       <div className="form-card lesson-original">
         <h3>课文正文</h3>
-        <p className="hint-text">在下方正文中拖选字词，点击「加入生词」即可添加（拼音会自动生成）。</p>
+        <p className="hint-text">在下方正文中用手指或鼠标拖选字词，再点「将选中的字词加入生词」（拼音会自动生成）。</p>
         <div className="lesson-original-body lesson-original-selectable">{data.content}</div>
         <div className="lesson-selection-bar">
           <button type="button" className="btn-secondary" onClick={addSelectedFromLesson}>
