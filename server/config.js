@@ -2,6 +2,19 @@ require('dotenv').config();
 const crypto = require('crypto');
 const path = require('path');
 
+/**
+ * Nginx 等反向代理会传 X-Forwarded-*；需开启 trust proxy，否则 express-rate-limit 等会报错。
+ * TRUST_PROXY=1 表示信任第一层代理（常见单级 Nginx）。
+ */
+function parseTrustProxy(raw) {
+  const v = (raw || '').trim().toLowerCase();
+  if (v === '' || v === '0' || v === 'false' || v === 'no') return false;
+  if (v === '1' || v === 'true' || v === 'yes') return 1;
+  const n = parseInt(raw, 10);
+  if (!Number.isNaN(n) && n >= 0) return n;
+  return false;
+}
+
 function requireJwtSecret() {
   const s = process.env.JWT_SECRET;
   const isProd = process.env.NODE_ENV === 'production';
@@ -23,6 +36,7 @@ module.exports = {
   /** Override with env `PORT` (e.g. 3001 if 3000 is taken). */
   port: parseInt(process.env.PORT, 10) || 3001,
   nodeEnv: process.env.NODE_ENV || 'development',
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   jwtSecret: requireJwtSecret(),
   jwtExpiresIn: '7d',
 
@@ -54,4 +68,11 @@ module.exports = {
   piperModel: process.env.PIPER_MODEL
     ? path.resolve(process.cwd(), process.env.PIPER_MODEL.trim())
     : path.join(__dirname, '..', 'models', 'piper', 'zh_CN-huayan-medium.onnx'),
+  /** Piper 韵律：略大于 1 时语速稍慢、停顿略舒展（可选，未设置则不传参） */
+  piperLengthScale: (() => {
+    const raw = process.env.PIPER_LENGTH_SCALE;
+    if (raw === undefined || raw === '') return null;
+    const n = parseFloat(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  })(),
 };

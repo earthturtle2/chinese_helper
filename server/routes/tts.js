@@ -65,6 +65,7 @@ module.exports = function ttsRoutes() {
         bin: config.piperBin,
         modelPath: path.resolve(config.piperModel),
         timeoutMs: 120000,
+        lengthScale: config.piperLengthScale,
       });
       res.setHeader('Content-Type', 'audio/wav');
       res.setHeader('Cache-Control', 'no-store');

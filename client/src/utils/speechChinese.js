@@ -43,7 +43,7 @@ function getZhVoice() {
   return pickPreferredZhVoice(voices);
 }
 
-/** 按句号等切分；无标点长段再按长度切开，便于 TTS 队列播放 */
+/** 按句号等切分；无标点长段再按长度切开，便于浏览器 TTS 队列播放 */
 export function splitTextForTts(text) {
   const t = String(text || '').trim();
   if (!t) return [];
@@ -60,6 +60,59 @@ export function splitTextForTts(text) {
     out.push(one.slice(i, i + maxLen));
   }
   return out;
+}
+
+/** 与服务器单次上限对齐；尽量整篇一次合成，减少多段 WAV 拼接导致的生硬停顿 */
+const MAX_PIPER_CHUNK = 7800;
+
+function splitHardByLength(s, maxLen) {
+  const out = [];
+  for (let i = 0; i < s.length; i += maxLen) {
+    out.push(s.slice(i, i + maxLen));
+  }
+  return out;
+}
+
+/**
+ * Piper 专用分段：不在分号、逗号处切段；只在句末（。！？）与换行处分段，再合并到不超过上限。
+ */
+export function splitTextForPiper(text) {
+  const t = String(text || '').trim().replace(/\r\n/g, '\n');
+  if (!t) return [];
+  if (t.length <= MAX_PIPER_CHUNK) return [t];
+
+  const rawUnits = t.split(/(?<=[。！？!?])\s*|\n+/u);
+  const units = [];
+  for (const r of rawUnits) {
+    const s = r.trim();
+    if (s) units.push(s);
+  }
+  if (units.length === 0) return [t.slice(0, MAX_PIPER_CHUNK)];
+
+  const chunks = [];
+  let buf = '';
+  for (const u of units) {
+    if (u.length > MAX_PIPER_CHUNK) {
+      if (buf) {
+        chunks.push(buf);
+        buf = '';
+      }
+      chunks.push(...splitHardByLength(u, MAX_PIPER_CHUNK));
+      continue;
+    }
+    if (buf.length + u.length <= MAX_PIPER_CHUNK) {
+      buf = buf ? buf + u : u;
+    } else {
+      if (buf) chunks.push(buf);
+      buf = u;
+    }
+  }
+  if (buf) chunks.push(buf);
+  return chunks;
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 function stopBrowserSpeech() {
@@ -165,8 +218,7 @@ function enqueueBrowserLongText(text, { rate = 0.92, onComplete, onError } = {})
  */
 export async function enqueueChineseLongText(text, { rate = 0.92, onComplete, onError } = {}) {
   stopChineseSpeech();
-  const chunks = splitTextForTts(text);
-  if (!chunks.length) {
+  if (!String(text || '').trim()) {
     onComplete?.();
     return;
   }
@@ -174,10 +226,15 @@ export async function enqueueChineseLongText(text, { rate = 0.92, onComplete, on
   const usePiper = await shouldUsePiper();
   if (usePiper) {
     try {
-      for (const chunk of chunks) {
+      const piperChunks = splitTextForPiper(text);
+      for (let i = 0; i < piperChunks.length; i++) {
+        const chunk = piperChunks[i];
         if (!chunk.trim()) continue;
         const blob = await api.ttsSpeak(chunk);
         await playWavBlob(blob);
+        if (i < piperChunks.length - 1) {
+          await sleep(160);
+        }
       }
       onComplete?.();
     } catch (e) {

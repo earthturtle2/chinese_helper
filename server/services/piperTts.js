@@ -7,11 +7,11 @@ const crypto = require('crypto');
 
 /**
  * @param {string} text
- * @param {{ bin: string; modelPath: string; timeoutMs?: number }} opts
+ * @param {{ bin: string; modelPath: string; timeoutMs?: number; lengthScale?: number | null }} opts
  * @returns {Promise<Buffer>}
  */
 async function synthToWav(text, opts) {
-  const { bin, modelPath, timeoutMs = 120000 } = opts;
+  const { bin, modelPath, timeoutMs = 120000, lengthScale = null } = opts;
   if (!bin || !modelPath) {
     const err = new Error('Piper 未配置');
     err.code = 'PIPER_NOT_CONFIGURED';
@@ -36,8 +36,14 @@ async function synthToWav(text, opts) {
 
   const outFile = path.join(os.tmpdir(), `piper-${crypto.randomBytes(8).toString('hex')}.wav`);
 
+  const spawnArgs = ['--model', modelPath];
+  if (lengthScale != null && Number.isFinite(lengthScale) && lengthScale > 0) {
+    spawnArgs.push('--length_scale', String(lengthScale));
+  }
+  spawnArgs.push('--output_file', outFile);
+
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, ['--model', modelPath, '--output_file', outFile], {
+    const child = spawn(bin, spawnArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
     });

@@ -11,6 +11,10 @@ const db = initDatabase();
 
 const app = express();
 
+if (config.trustProxy !== false) {
+  app.set('trust proxy', config.trustProxy);
+}
+
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
@@ -103,4 +107,7 @@ const PORT = config.port;
 app.listen(PORT, () => {
   console.log(`[Server] Chinese Helper running at http://localhost:${PORT}`);
   console.log(`[Server] Environment: ${config.nodeEnv}`);
+  if (config.trustProxy !== false) {
+    console.log(`[Server] trust proxy: ${config.trustProxy} (set TRUST_PROXY=0 to disable)`);
+  }
 });
