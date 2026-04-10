@@ -5,7 +5,6 @@
   "type": "module",
   "scripts": {
     "fetch-models": "node ../scripts/fetch-crnn-assets.mjs",
-    "prebuild": "node ../scripts/fetch-crnn-assets.mjs",
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",

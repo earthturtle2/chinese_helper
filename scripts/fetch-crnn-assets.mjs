@@ -59,16 +59,32 @@ function extractAlphabet(py) {
 }
 
 async function main() {
+  const force = process.argv.includes('--force');
   fs.mkdirSync(OUT_DIR, { recursive: true });
+
+  const onnxPath = join(OUT_DIR, 'crnn_lite_lstm.onnx');
+  const alphabetPath = join(OUT_DIR, 'alphabet-chinese.txt');
+
+  if (
+    !force &&
+    fs.existsSync(onnxPath) &&
+    fs.statSync(onnxPath).size > 1_000_000 &&
+    fs.existsSync(alphabetPath) &&
+    fs.statSync(alphabetPath).size > 1000
+  ) {
+    console.log('[fetch-crnn] Models already present, skip download. Use --force to re-download.');
+    return;
+  }
+
   console.log('[fetch-crnn] Downloading CRNN ONNX...');
   const onnx = await fetchBinary(ONNX_URL);
-  fs.writeFileSync(join(OUT_DIR, 'crnn_lite_lstm.onnx'), onnx);
+  fs.writeFileSync(onnxPath, onnx);
   console.log('[fetch-crnn] Wrote crnn_lite_lstm.onnx', `(${(onnx.length / 1024 / 1024).toFixed(2)} MB)`);
 
   console.log('[fetch-crnn] Downloading keys.py...');
   const keysPy = await fetchText(KEYS_URL);
   const alphabet = extractAlphabet(keysPy);
-  fs.writeFileSync(join(OUT_DIR, 'alphabet-chinese.txt'), alphabet, 'utf8');
+  fs.writeFileSync(alphabetPath, alphabet, 'utf8');
   console.log('[fetch-crnn] Wrote alphabet-chinese.txt', `(chars: ${[...alphabet].length})`);
   console.log('[fetch-crnn] Done.');
 }

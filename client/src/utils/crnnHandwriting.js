@@ -67,16 +67,20 @@ export function decodeCtc(indices, chars) {
   return out.join('');
 }
 
-function canvasHasDarkInk(canvas, threshold = 245) {
-  const ctx = canvas.getContext('2d');
-  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+/**
+ * 与推理前一致：白底合成后再检测是否有非白像素。
+ * 直接在透明笔迹层上检测会误伤：反锯齿边缘 a 很小被跳过、或透明区 r=g=b=0 被误判。
+ */
+function compositeCanvasHasInk(inkCanvas) {
+  const c = compositeWhiteBackground(inkCanvas);
+  const ctx = c.getContext('2d');
+  const { data } = ctx.getImageData(0, 0, c.width, c.height);
+  const white = 252;
   for (let i = 0; i < data.length; i += 4) {
     const r = data[i];
     const g = data[i + 1];
     const b = data[i + 2];
-    const a = data[i + 3];
-    if (a < 20) continue;
-    if (r < threshold || g < threshold || b < threshold) return true;
+    if (r < white || g < white || b < white) return true;
   }
   return false;
 }
@@ -149,7 +153,7 @@ export async function recognizeInkCanvas(inkCanvas) {
   const ort = await getOrt();
   const session = await getCrnnSession();
 
-  if (!canvasHasDarkInk(inkCanvas)) {
+  if (!compositeCanvasHasInk(inkCanvas)) {
     return '';
   }
 
