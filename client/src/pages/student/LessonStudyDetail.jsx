@@ -1,7 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../../api';
-import { enqueueChineseLongText, stopChineseSpeech } from '../../utils/speechChinese';
+import {
+  enqueueChineseLongText,
+  stopChineseSpeech,
+  pauseFullTextSpeech,
+  resumeFullTextSpeech,
+} from '../../utils/speechChinese';
 import { useTtsEngine } from '../../hooks/useTtsEngine';
 import TtsEngineBadge from '../../components/TtsEngineBadge';
 
@@ -17,6 +22,7 @@ export default function LessonStudyDetail() {
 
   const [data, setData] = useState(null);
   const [reading, setReading] = useState(false);
+  const [readingPaused, setReadingPaused] = useState(false);
   const [ttsError, setTtsError] = useState('');
   const [wordForm, setWordForm] = useState({ word: '' });
   const [wordMsg, setWordMsg] = useState('');
@@ -36,21 +42,37 @@ export default function LessonStudyDetail() {
   const stopReading = useCallback(() => {
     stopChineseSpeech();
     setReading(false);
+    setReadingPaused(false);
+  }, []);
+
+  const pauseReading = useCallback(() => {
+    pauseFullTextSpeech();
+    setReadingPaused(true);
+  }, []);
+
+  const resumeReading = useCallback(() => {
+    resumeFullTextSpeech();
+    setReadingPaused(false);
   }, []);
 
   const readFullText = useCallback(() => {
     if (!data?.content) return;
     setTtsError('');
+    setReadingPaused(false);
     setReading(true);
     void enqueueChineseLongText(data.content, {
       rate: 0.92,
-      onComplete: () => setReading(false),
+      onComplete: () => {
+        setReading(false);
+        setReadingPaused(false);
+      },
       onError: () => {
         setReading(false);
+        setReadingPaused(false);
         setTtsError('朗读失败：当前浏览器可能不支持中文语音，请尝试使用 Chrome 浏览器，或在系统设置中安装中文语音引擎。');
       },
     });
-  }, [data?.content, stopReading]);
+  }, [data?.content]);
 
   useEffect(() => {
     return () => {
@@ -121,14 +143,36 @@ export default function LessonStudyDetail() {
       </div>
 
       <div className="lesson-toolbar">
-        <button
-          type="button"
-          className="btn-primary"
-          onClick={reading ? stopReading : readFullText}
-          disabled={!data.content}
-        >
-          {reading ? '⏹ 停止朗读' : '🔊 朗读全文'}
-        </button>
+        <div className="lesson-reading-controls">
+          {!reading && (
+            <button type="button" className="btn-primary" onClick={readFullText} disabled={!data.content}>
+              🔊 朗读全文
+            </button>
+          )}
+          {reading && (
+            <>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={pauseReading}
+                disabled={readingPaused}
+              >
+                ⏸ 暂停
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={resumeReading}
+                disabled={!readingPaused}
+              >
+                ▶ 继续
+              </button>
+              <button type="button" className="btn-primary" onClick={stopReading}>
+                ⏹ 停止
+              </button>
+            </>
+          )}
+        </div>
         {ttsError && <p className="hint-text" style={{ color: '#c00', margin: '8px 0' }}>{ttsError}</p>}
         <div className="lesson-toolbar-tts">
           <TtsEngineBadge

@@ -590,6 +590,12 @@ button.login-gear-btn { appearance: none; }
   gap: 12px;
   margin-bottom: 16px;
 }
+.lesson-reading-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
 .lesson-toolbar-tts {
   display: flex;
   flex-direction: column;

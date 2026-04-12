@@ -17,10 +17,90 @@
  *     b) 首次 speechSynthesis.speak() 激活引擎（warmup）
  *   - 浏览器 TTS 的 speak() 延迟 150ms，避开 cancel-speak 竞态
  *   - Kokoro / Piper 返回的 WAV 通过已解锁的 AudioContext.decodeAudioData 播放
+ *   - speakChineseWord / enqueueChineseLongText 带短间隔 + 互斥，防止连续猛点重复触发
  */
 
 import { api } from '../api';
 import { abortKokoroSynthesis, synthesizeKokoroZh, splitTextForKokoro } from './kokoroZhTts';
+
+/** 防止连续猛点：短句最小间隔 + 互斥；长文最小间隔 + 互斥（含浏览器分段读完） */
+const SPEAK_WORD_MIN_GAP_MS = 420;
+const LONG_TEXT_MIN_GAP_MS = 700;
+
+let speakWordBusy = false;
+let lastSpeakWordAt = 0;
+
+let longTextBusy = false;
+let lastLongTextAt = 0;
+
+/** 全文朗读暂停：分段合成/播放之间会等待此处恢复 */
+let fullTextPaused = false;
+const fullTextPauseResolvers = [];
+
+export function getFullTextSpeechPaused() {
+  return fullTextPaused;
+}
+
+export async function waitUntilFullTextResumed() {
+  while (fullTextPaused) {
+    await new Promise((resolve) => {
+      fullTextPauseResolvers.push(resolve);
+    });
+  }
+}
+
+/**
+ * 暂停全文朗读（Web Audio / HTML audio / speechSynthesis）。
+ * 短句单字朗读勿调用；与 continue 成对使用。
+ */
+export function pauseFullTextSpeech() {
+  fullTextPaused = true;
+  try {
+    if (sharedAudioCtx && sharedAudioCtx.state === 'running') void sharedAudioCtx.suspend();
+  } catch { /* ignore */ }
+  try {
+    if (currentAudio && !currentAudio.paused) currentAudio.pause();
+  } catch { /* ignore */ }
+  try {
+    if (typeof speechSynthesis !== 'undefined' && speechSynthesis.speaking && !speechSynthesis.paused) {
+      speechSynthesis.pause();
+    }
+  } catch { /* ignore */ }
+}
+
+/**
+ * 继续全文朗读。
+ */
+export function resumeFullTextSpeech() {
+  fullTextPaused = false;
+  while (fullTextPauseResolvers.length) {
+    const r = fullTextPauseResolvers.pop();
+    try {
+      r();
+    } catch { /* ignore */ }
+  }
+  try {
+    if (sharedAudioCtx && sharedAudioCtx.state === 'suspended') void sharedAudioCtx.resume();
+  } catch { /* ignore */ }
+  try {
+    if (currentAudio && currentAudio.paused) void currentAudio.play();
+  } catch { /* ignore */ }
+  try {
+    if (typeof speechSynthesis !== 'undefined' && speechSynthesis.paused) {
+      speechSynthesis.resume();
+    }
+  } catch { /* ignore */ }
+}
+
+function clearFullTextPauseState() {
+  fullTextPaused = false;
+  while (fullTextPauseResolvers.length) {
+    const r = fullTextPauseResolvers.pop();
+    try {
+      r();
+    } catch { /* ignore */ }
+  }
+}
 
 /* ─── voice 管理 ─── */
 
@@ -170,6 +250,7 @@ export function unlockAudioPlayback() {
  * AudioContext 在 resume() 后不受后续异步限制。
  */
 export async function playWavBlob(blob) {
+  await waitUntilFullTextResumed();
   if (sharedAudioCtx) {
     try {
       if (sharedAudioCtx.state === 'suspended') await sharedAudioCtx.resume();
@@ -284,60 +365,106 @@ function prepareBrowserTts() {
 
 /**
  * 短文本浏览器朗读。延迟 150ms 以避开 cancel 竞态。
- * onError 回调可选：当引擎实际未播放时触发（onend 无 onstart）。
+ * onError 可选：当引擎实际未播放时触发（onend 无 onstart）。
+ * 返回在一句播放结束或出错时 resolve 的 Promise，便于与防抖互斥配合。
  */
 function speakBrowserWord(text, { rate = 0.82, onError } = {}) {
-  if (typeof speechSynthesis === 'undefined' || !text) { onError?.(); return; }
+  if (typeof speechSynthesis === 'undefined' || !text) {
+    onError?.();
+    return Promise.resolve();
+  }
   cancelBrowserSpeechTimer();
-  const gen = ++browserSpeechGen;
-  browserSpeechTimer = setTimeout(() => {
-    browserSpeechTimer = null;
-    if (gen !== browserSpeechGen) return;
-    prepareBrowserTts();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'zh-CN';
-    u.rate = rate;
-    u.volume = 1;
-    const voice = getZhVoice();
-    if (voice) u.voice = voice;
-    let started = false;
-    u.onstart = () => { started = true; };
-    u.onend = () => { if (!started) onError?.(); };
-    u.onerror = () => { onError?.(); };
-    speechSynthesis.speak(u);
-  }, 150);
+  return new Promise((resolve) => {
+    const gen = ++browserSpeechGen;
+    browserSpeechTimer = setTimeout(() => {
+      browserSpeechTimer = null;
+      if (gen !== browserSpeechGen) {
+        resolve();
+        return;
+      }
+      prepareBrowserTts();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'zh-CN';
+      u.rate = rate;
+      u.volume = 1;
+      const voice = getZhVoice();
+      if (voice) u.voice = voice;
+      let started = false;
+      u.onstart = () => { started = true; };
+      const done = () => {
+        resolve();
+      };
+      u.onend = () => {
+        if (!started) onError?.();
+        done();
+      };
+      u.onerror = () => {
+        onError?.();
+        done();
+      };
+      speechSynthesis.speak(u);
+    }, 150);
+  });
 }
 
 /**
  * 长文浏览器朗读（分句入队）。延迟 150ms 以避开 cancel 竞态。
  * 第一句设置 onstart 检测；若引擎未真正播放，触发 onError。
+ * 返回在队列末尾播放完成或出错时 resolve 的 Promise。
  */
 function enqueueBrowserLongText(text, { rate = 0.92, onComplete, onError } = {}) {
-  if (typeof speechSynthesis === 'undefined') { onError?.(); onComplete?.(); return; }
+  if (typeof speechSynthesis === 'undefined') {
+    onError?.();
+    onComplete?.();
+    return Promise.resolve();
+  }
   cancelBrowserSpeechTimer();
-  const gen = ++browserSpeechGen;
-  browserSpeechTimer = setTimeout(() => {
-    browserSpeechTimer = null;
-    if (gen !== browserSpeechGen) return;
-    prepareBrowserTts();
-    const chunks = splitTextForTts(text);
-    if (!chunks.length) { onComplete?.(); return; }
-    const voice = getZhVoice();
-    let anyStarted = false;
-    chunks.forEach((chunk, i) => {
-      const u = new SpeechSynthesisUtterance(chunk);
-      u.lang = 'zh-CN';
-      u.rate = rate;
-      u.volume = 1;
-      if (voice) u.voice = voice;
-      u.onstart = () => { anyStarted = true; };
-      if (i === chunks.length - 1) {
-        u.onend = () => { if (!anyStarted) onError?.(); onComplete?.(); };
-        u.onerror = () => { onError?.(); onComplete?.(); };
+  return new Promise((resolve) => {
+    const gen = ++browserSpeechGen;
+    const finish = () => {
+      resolve();
+    };
+    browserSpeechTimer = setTimeout(() => {
+      void (async () => {
+      browserSpeechTimer = null;
+      if (gen !== browserSpeechGen) {
+        finish();
+        return;
       }
-      speechSynthesis.speak(u);
-    });
-  }, 150);
+      await waitUntilFullTextResumed();
+      prepareBrowserTts();
+      const chunks = splitTextForTts(text);
+      if (!chunks.length) {
+        onComplete?.();
+        finish();
+        return;
+      }
+      const voice = getZhVoice();
+      let anyStarted = false;
+      chunks.forEach((chunk, i) => {
+        const u = new SpeechSynthesisUtterance(chunk);
+        u.lang = 'zh-CN';
+        u.rate = rate;
+        u.volume = 1;
+        if (voice) u.voice = voice;
+        u.onstart = () => { anyStarted = true; };
+        if (i === chunks.length - 1) {
+          u.onend = () => {
+            if (!anyStarted) onError?.();
+            onComplete?.();
+            finish();
+          };
+          u.onerror = () => {
+            onError?.();
+            onComplete?.();
+            finish();
+          };
+        }
+        speechSynthesis.speak(u);
+      });
+      })();
+    }, 150);
+  });
 }
 
 /* ─── 工具 ─── */
@@ -351,102 +478,128 @@ function sleep(ms) {
 /**
  * 朗读短文本（生词、单句）。
  * onError 可选：当 Kokoro、Piper 与浏览器 TTS 都失败时触发。
+ * 连续点击会在上一段尚未结束或间隔过短时忽略（防抖）。
  */
 export async function speakChineseWord(text, { rate = 0.82, cancelBefore = true, onError } = {}) {
   if (!text) return;
-  unlockAudioPlayback();
-  if (cancelBefore) stopChineseSpeech();
+  const now = Date.now();
+  if (speakWordBusy) return;
+  if (now - lastSpeakWordAt < SPEAK_WORD_MIN_GAP_MS) return;
+  lastSpeakWordAt = now;
+  speakWordBusy = true;
+  try {
+    unlockAudioPlayback();
+    if (cancelBefore) stopChineseSpeech();
 
-  if (preferredTtsEngine === 'kokoro') {
-    try {
-      const raw = await synthesizeKokoroZh(text, kokoroClientOptions);
-      await playWavBlob(raw.toBlob());
-      return;
-    } catch (e) {
-      if (e?.name === 'AbortError') return;
-      console.warn('Kokoro TTS failed:', e?.message || e);
+    if (preferredTtsEngine === 'kokoro') {
+      try {
+        const raw = await synthesizeKokoroZh(text, kokoroClientOptions);
+        await playWavBlob(raw.toBlob());
+        return;
+      } catch (e) {
+        if (e?.name === 'AbortError') return;
+        console.warn('Kokoro TTS failed:', e?.message || e);
+      }
     }
-  }
 
-  if (piperResolved === true) {
-    try {
-      const blob = await api.ttsSpeak(text);
-      await playWavBlob(blob);
-      return;
-    } catch (e) {
-      primePiperTtsStatus(false);
-      console.warn('Piper TTS failed, disabling for this session:', e?.message || e);
+    if (piperResolved === true) {
+      try {
+        const blob = await api.ttsSpeak(text);
+        await playWavBlob(blob);
+        return;
+      } catch (e) {
+        primePiperTtsStatus(false);
+        console.warn('Piper TTS failed, disabling for this session:', e?.message || e);
+      }
     }
-  }
 
-  if (piperResolved === null) {
-    void api
-      .getTtsStatus()
-      .then((s) => primeTtsFromStatus(s))
-      .catch(() => primePiperTtsStatus(false));
+    if (piperResolved === null) {
+      void api
+        .getTtsStatus()
+        .then((s) => primeTtsFromStatus(s))
+        .catch(() => primePiperTtsStatus(false));
+    }
+    await speakBrowserWord(text, { rate, onError });
+  } finally {
+    speakWordBusy = false;
   }
-  speakBrowserWord(text, { rate, onError });
 }
 
 /**
  * 长文朗读：首选 Kokoro 时分段合成；否则 Piper → WebAudio；再否则浏览器 TTS。
+ * 连续点击会在上一段尚未结束或间隔过短时忽略（防抖）。
  */
 export async function enqueueChineseLongText(text, { rate = 0.92, onComplete, onError } = {}) {
-  unlockAudioPlayback();
-  stopChineseSpeech();
-  if (!String(text || '').trim()) { onComplete?.(); return; }
-
-  if (preferredTtsEngine === 'kokoro') {
-    try {
-      const parts = splitTextForKokoro(text);
-      for (let i = 0; i < parts.length; i++) {
-        const chunk = parts[i];
-        if (!chunk.trim()) continue;
-        const raw = await synthesizeKokoroZh(chunk, kokoroClientOptions);
-        await playWavBlob(raw.toBlob());
-        if (i < parts.length - 1) await sleep(120);
-      }
+  const now = Date.now();
+  if (longTextBusy) return;
+  if (now - lastLongTextAt < LONG_TEXT_MIN_GAP_MS) return;
+  lastLongTextAt = now;
+  longTextBusy = true;
+  try {
+    unlockAudioPlayback();
+    stopChineseSpeech();
+    if (!String(text || '').trim()) {
       onComplete?.();
       return;
+    }
+
+    if (preferredTtsEngine === 'kokoro') {
+      try {
+        const parts = splitTextForKokoro(text);
+        for (let i = 0; i < parts.length; i++) {
+          await waitUntilFullTextResumed();
+          const chunk = parts[i];
+          if (!chunk.trim()) continue;
+          const raw = await synthesizeKokoroZh(chunk, kokoroClientOptions);
+          await playWavBlob(raw.toBlob());
+          if (i < parts.length - 1) await sleep(120);
+        }
+        onComplete?.();
+        return;
+      } catch (e) {
+        if (e?.name === 'AbortError') return;
+        console.warn('Kokoro 长文朗读失败:', e?.message || e);
+      }
+    }
+
+    if (piperResolved === false) {
+      await enqueueBrowserLongText(text, { rate, onComplete, onError });
+      return;
+    }
+
+    if (piperResolved === null) {
+      void api
+        .getTtsStatus()
+        .then((s) => primeTtsFromStatus(s))
+        .catch(() => primePiperTtsStatus(false));
+      await enqueueBrowserLongText(text, { rate, onComplete, onError });
+      return;
+    }
+
+    try {
+      const piperChunks = splitTextForPiper(text);
+      for (let i = 0; i < piperChunks.length; i++) {
+        await waitUntilFullTextResumed();
+        const chunk = piperChunks[i];
+        if (!chunk.trim()) continue;
+        const blob = await api.ttsSpeak(chunk);
+        await playWavBlob(blob);
+        if (i < piperChunks.length - 1) await sleep(160);
+      }
+      onComplete?.();
     } catch (e) {
-      if (e?.name === 'AbortError') return;
-      console.warn('Kokoro 长文朗读失败:', e?.message || e);
+      primePiperTtsStatus(false);
+      console.warn('Piper 长文朗读失败, disabling for this session:', e?.message || e);
+      await enqueueBrowserLongText(text, { rate, onComplete, onError });
     }
-  }
-
-  if (piperResolved === false) {
-    enqueueBrowserLongText(text, { rate, onComplete, onError });
-    return;
-  }
-
-  if (piperResolved === null) {
-    void api
-      .getTtsStatus()
-      .then((s) => primeTtsFromStatus(s))
-      .catch(() => primePiperTtsStatus(false));
-    enqueueBrowserLongText(text, { rate, onComplete, onError });
-    return;
-  }
-
-  try {
-    const piperChunks = splitTextForPiper(text);
-    for (let i = 0; i < piperChunks.length; i++) {
-      const chunk = piperChunks[i];
-      if (!chunk.trim()) continue;
-      const blob = await api.ttsSpeak(chunk);
-      await playWavBlob(blob);
-      if (i < piperChunks.length - 1) await sleep(160);
-    }
-    onComplete?.();
-  } catch (e) {
-    primePiperTtsStatus(false);
-    console.warn('Piper 长文朗读失败, disabling for this session:', e?.message || e);
-    enqueueBrowserLongText(text, { rate, onComplete, onError });
+  } finally {
+    longTextBusy = false;
   }
 }
 
 export function stopChineseSpeech() {
   abortKokoroSynthesis();
+  clearFullTextPauseState();
   cancelBrowserSpeechTimer();
   stopBrowserSpeech();
   if (currentSource) {
