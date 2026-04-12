@@ -39,7 +39,6 @@ export default function LessonStudyDetail() {
 
   const readFullText = useCallback(() => {
     if (!data?.content) return;
-    stopChineseSpeech();
     setReading(true);
     void enqueueChineseLongText(data.content, {
       rate: 0.92,

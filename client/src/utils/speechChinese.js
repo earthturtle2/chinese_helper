@@ -2,20 +2,21 @@
  * 中文朗读：优先使用服务端 Piper（本地神经网络），不可用时回退到 Web Speech API。
  *
  * 移动端核心约束（iOS Safari / Android WebView / 国产浏览器）：
- *   1. speechSynthesis.speak() 必须在用户手势的 **同步** 调用栈内触发。
- *      任何 await / setTimeout / requestAnimationFrame 都会让手势"过期"。
- *   2. HTML <audio>.play() 同样要求在手势内触发。
- *   3. Web Audio API 的 AudioContext 一旦在手势内 resume()，
- *      **整个页面会话中** 都可以通过它播放音频，不再受手势限制。
+ *
+ *   1. speechSynthesis.speak() 首次调用须在用户手势同步栈内；
+ *      之后的调用不再强制要求手势。
+ *   2. Android Chromium 已知 bug：speechSynthesis.cancel() 后立即 speak()
+ *      会导致 utterance 的 onend 立刻触发而不真正播放。
+ *      解决方法：cancel 与 speak 之间加 ≥100ms 延迟。
+ *   3. Web Audio API 的 AudioContext 在手势内 resume() 后
+ *      整个页面会话中保持解锁，用于 Piper WAV 播放。
  *
  * 策略：
- *   - 每次朗读入口（speakChineseWord / enqueueChineseLongText）首先同步
- *     调用 unlockAudioPlayback() 解锁 AudioContext。
- *   - Piper WAV 通过已解锁的 AudioContext.decodeAudioData + BufferSource 播放，
- *     不再依赖 <audio> 元素。
- *   - 浏览器 TTS 直接同步 speak()，设 lang='zh-CN'；
- *     即使 getVoices() 暂时为空也能播（系统默认引擎按 lang 匹配）。
- *   - Piper 状态在模块加载 / useTtsEngine 探测后缓存，朗读时不再 await 状态接口。
+ *   - unlockAudioPlayback() 在手势内同步调用：
+ *     a) 解锁 AudioContext（供 Piper WAV）
+ *     b) 首次 speechSynthesis.speak() 激活引擎（warmup）
+ *   - 浏览器 TTS 的 speak() 延迟 150ms，避开 cancel-speak 竞态
+ *   - Piper WAV 通过已解锁的 AudioContext.decodeAudioData 播放
  */
 
 import { api } from '../api';
@@ -118,18 +119,24 @@ export function splitTextForPiper(text) {
   return chunks;
 }
 
-/* ─── AudioContext 解锁 & Web Audio 播放 ─── */
+/* ─── AudioContext 解锁 & Web Audio 播放（Piper WAV） ─── */
 
 let sharedAudioCtx = null;
 let currentSource = null;
 let currentAudio = null;
 
+let speechWarmupDone = false;
+
 /**
- * 在用户手势的同步调用栈内调用。
- * 创建 / resume 共享 AudioContext 并播放一帧静音，解锁后整页会话有效。
+ * 必须在用户手势的同步调用栈内调用（点击回调顶层，任何 await 之前）。
+ *
+ * a) 创建 / resume 共享 AudioContext 并播一帧静音 → 解锁 WebAudio（Piper 用）
+ * b) 首次 speechSynthesis.speak() 激活引擎（warmup），
+ *    之后的 speak() 不再要求手势，配合 setTimeout 延迟可安全使用
  */
 export function unlockAudioPlayback() {
   if (typeof window === 'undefined') return;
+
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (Ctx) {
@@ -142,11 +149,24 @@ export function unlockAudioPlayback() {
       src.start(0);
     }
   } catch { /* ignore */ }
+
+  if (!speechWarmupDone && typeof speechSynthesis !== 'undefined') {
+    speechWarmupDone = true;
+    try {
+      speechSynthesis.resume();
+      refreshVoices();
+      const warmup = new SpeechSynthesisUtterance('\u00A0');
+      warmup.lang = 'zh-CN';
+      warmup.volume = 0.01;
+      warmup.rate = 10;
+      speechSynthesis.speak(warmup);
+    } catch { /* ignore */ }
+  }
 }
 
 /**
- * 通过已解锁的 AudioContext 播放 WAV/音频 blob。
- * AudioContext 在 resume() 后不受后续异步影响，因此 Piper 网络请求后仍可播放。
+ * 通过已解锁的 AudioContext 播放 WAV blob（Piper 返回值）。
+ * AudioContext 在 resume() 后不受后续异步限制。
  */
 async function playWavBlob(blob) {
   if (sharedAudioCtx) {
@@ -189,13 +209,12 @@ async function playWavBlob(blob) {
     audio.addEventListener('ended', () => { cleanup(); resolve(); }, { once: true });
     audio.addEventListener('error', () => { cleanup(); reject(new Error('audio playback')); }, { once: true });
     try { document.body.appendChild(audio); } catch { /* ignore */ }
-    audio.play().catch((e) => { cleanup(); reject(e); });
+    audio.play().catch((e2) => { cleanup(); reject(e2); });
   });
 }
 
 /* ─── Piper 状态 ─── */
 
-/** null=未探测, true=Piper 可用, false=不可用 */
 let piperResolved = null;
 
 export function primePiperTtsStatus(available) {
@@ -207,17 +226,29 @@ void api
   .then((s) => primePiperTtsStatus(!!(s && s.available)))
   .catch(() => { if (piperResolved === null) primePiperTtsStatus(false); });
 
-/* ─── 浏览器 TTS ─── */
+/* ─── 浏览器 TTS（带 cancel-speak 竞态保护） ─── */
+
+/**
+ * 浏览器 TTS 定时器 + 代计数器。
+ * cancel() 与 speak() 之间须 ≥150ms 间隔以绕过 Android Chromium bug。
+ * stopChineseSpeech() 通过 cancelBrowserSpeechTimer() 清除待执行的 speak。
+ */
+let browserSpeechTimer = null;
+let browserSpeechGen = 0;
+
+function cancelBrowserSpeechTimer() {
+  if (browserSpeechTimer != null) {
+    clearTimeout(browserSpeechTimer);
+    browserSpeechTimer = null;
+  }
+  browserSpeechGen++;
+}
 
 function stopBrowserSpeech() {
   if (typeof speechSynthesis === 'undefined') return;
   speechSynthesis.cancel();
 }
 
-/**
- * Android WebView 常需 resume() 才能让 speechSynthesis 工作；
- * 同时主动刷新 voice 缓存。
- */
 function prepareBrowserTts() {
   if (typeof speechSynthesis === 'undefined') return;
   try { speechSynthesis.resume(); } catch { /* ignore */ }
@@ -225,40 +256,53 @@ function prepareBrowserTts() {
 }
 
 /**
- * 同步调用 speechSynthesis.speak()。
- * 即使 getVoices() 为空也直接 speak —— 系统会按 lang 匹配默认引擎。
- * 绝不使用 requestAnimationFrame / setTimeout，避免丢失手势。
+ * 短文本浏览器朗读。延迟 150ms 以避开 cancel 竞态。
  */
 function speakBrowserWord(text, { rate = 0.82 } = {}) {
   if (typeof speechSynthesis === 'undefined' || !text) return;
-  prepareBrowserTts();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'zh-CN';
-  u.rate = rate;
-  u.volume = 1;
-  const voice = getZhVoice();
-  if (voice) u.voice = voice;
-  speechSynthesis.speak(u);
-}
-
-function enqueueBrowserLongText(text, { rate = 0.92, onComplete, onError } = {}) {
-  if (typeof speechSynthesis === 'undefined') { onComplete?.(); return; }
-  prepareBrowserTts();
-  const chunks = splitTextForTts(text);
-  if (!chunks.length) { onComplete?.(); return; }
-  const voice = getZhVoice();
-  chunks.forEach((chunk, i) => {
-    const u = new SpeechSynthesisUtterance(chunk);
+  cancelBrowserSpeechTimer();
+  const gen = ++browserSpeechGen;
+  browserSpeechTimer = setTimeout(() => {
+    browserSpeechTimer = null;
+    if (gen !== browserSpeechGen) return;
+    prepareBrowserTts();
+    const u = new SpeechSynthesisUtterance(text);
     u.lang = 'zh-CN';
     u.rate = rate;
     u.volume = 1;
+    const voice = getZhVoice();
     if (voice) u.voice = voice;
-    if (i === chunks.length - 1) {
-      u.onend = () => onComplete?.();
-      u.onerror = () => { onError?.(); onComplete?.(); };
-    }
     speechSynthesis.speak(u);
-  });
+  }, 150);
+}
+
+/**
+ * 长文浏览器朗读（分句入队）。延迟 150ms 以避开 cancel 竞态。
+ */
+function enqueueBrowserLongText(text, { rate = 0.92, onComplete, onError } = {}) {
+  if (typeof speechSynthesis === 'undefined') { onComplete?.(); return; }
+  cancelBrowserSpeechTimer();
+  const gen = ++browserSpeechGen;
+  browserSpeechTimer = setTimeout(() => {
+    browserSpeechTimer = null;
+    if (gen !== browserSpeechGen) return;
+    prepareBrowserTts();
+    const chunks = splitTextForTts(text);
+    if (!chunks.length) { onComplete?.(); return; }
+    const voice = getZhVoice();
+    chunks.forEach((chunk, i) => {
+      const u = new SpeechSynthesisUtterance(chunk);
+      u.lang = 'zh-CN';
+      u.rate = rate;
+      u.volume = 1;
+      if (voice) u.voice = voice;
+      if (i === chunks.length - 1) {
+        u.onend = () => onComplete?.();
+        u.onerror = () => { onError?.(); onComplete?.(); };
+      }
+      speechSynthesis.speak(u);
+    });
+  }, 150);
 }
 
 /* ─── 工具 ─── */
@@ -271,12 +315,11 @@ function sleep(ms) {
 
 /**
  * 朗读短文本（生词、单句）。
- * Piper 可用时走 WebAudio 播放服务端 WAV；否则同步走浏览器 TTS。
  */
 export async function speakChineseWord(text, { rate = 0.82, cancelBefore = true } = {}) {
   if (!text) return;
-  if (cancelBefore) stopChineseSpeech();
   unlockAudioPlayback();
+  if (cancelBefore) stopChineseSpeech();
 
   if (piperResolved === true) {
     try {
@@ -287,8 +330,6 @@ export async function speakChineseWord(text, { rate = 0.82, cancelBefore = true 
       if (e?.status === 503) primePiperTtsStatus(false);
       console.warn('Piper TTS:', e?.message || e);
     }
-    speakBrowserWord(text, { rate });
-    return;
   }
 
   if (piperResolved === null) {
@@ -301,7 +342,7 @@ export async function speakChineseWord(text, { rate = 0.82, cancelBefore = true 
 }
 
 /**
- * 长文朗读：优先 Piper 分段 → WebAudio 顺序播放；否则浏览器 TTS 分段入队。
+ * 长文朗读：优先 Piper → WebAudio；否则浏览器 TTS 分段入队。
  */
 export async function enqueueChineseLongText(text, { rate = 0.92, onComplete, onError } = {}) {
   unlockAudioPlayback();
@@ -340,6 +381,7 @@ export async function enqueueChineseLongText(text, { rate = 0.92, onComplete, on
 }
 
 export function stopChineseSpeech() {
+  cancelBrowserSpeechTimer();
   stopBrowserSpeech();
   if (currentSource) {
     try { currentSource.stop(); } catch { /* ignore */ }
