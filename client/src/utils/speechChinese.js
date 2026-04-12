@@ -257,9 +257,10 @@ function prepareBrowserTts() {
 
 /**
  * 短文本浏览器朗读。延迟 150ms 以避开 cancel 竞态。
+ * onError 回调可选：当引擎实际未播放时触发（onend 无 onstart）。
  */
-function speakBrowserWord(text, { rate = 0.82 } = {}) {
-  if (typeof speechSynthesis === 'undefined' || !text) return;
+function speakBrowserWord(text, { rate = 0.82, onError } = {}) {
+  if (typeof speechSynthesis === 'undefined' || !text) { onError?.(); return; }
   cancelBrowserSpeechTimer();
   const gen = ++browserSpeechGen;
   browserSpeechTimer = setTimeout(() => {
@@ -272,15 +273,20 @@ function speakBrowserWord(text, { rate = 0.82 } = {}) {
     u.volume = 1;
     const voice = getZhVoice();
     if (voice) u.voice = voice;
+    let started = false;
+    u.onstart = () => { started = true; };
+    u.onend = () => { if (!started) onError?.(); };
+    u.onerror = () => { onError?.(); };
     speechSynthesis.speak(u);
   }, 150);
 }
 
 /**
  * 长文浏览器朗读（分句入队）。延迟 150ms 以避开 cancel 竞态。
+ * 第一句设置 onstart 检测；若引擎未真正播放，触发 onError。
  */
 function enqueueBrowserLongText(text, { rate = 0.92, onComplete, onError } = {}) {
-  if (typeof speechSynthesis === 'undefined') { onComplete?.(); return; }
+  if (typeof speechSynthesis === 'undefined') { onError?.(); onComplete?.(); return; }
   cancelBrowserSpeechTimer();
   const gen = ++browserSpeechGen;
   browserSpeechTimer = setTimeout(() => {
@@ -290,14 +296,16 @@ function enqueueBrowserLongText(text, { rate = 0.92, onComplete, onError } = {})
     const chunks = splitTextForTts(text);
     if (!chunks.length) { onComplete?.(); return; }
     const voice = getZhVoice();
+    let anyStarted = false;
     chunks.forEach((chunk, i) => {
       const u = new SpeechSynthesisUtterance(chunk);
       u.lang = 'zh-CN';
       u.rate = rate;
       u.volume = 1;
       if (voice) u.voice = voice;
+      u.onstart = () => { anyStarted = true; };
       if (i === chunks.length - 1) {
-        u.onend = () => onComplete?.();
+        u.onend = () => { if (!anyStarted) onError?.(); onComplete?.(); };
         u.onerror = () => { onError?.(); onComplete?.(); };
       }
       speechSynthesis.speak(u);
@@ -315,8 +323,9 @@ function sleep(ms) {
 
 /**
  * 朗读短文本（生词、单句）。
+ * onError 可选：当 Piper 和浏览器 TTS 都失败时触发。
  */
-export async function speakChineseWord(text, { rate = 0.82, cancelBefore = true } = {}) {
+export async function speakChineseWord(text, { rate = 0.82, cancelBefore = true, onError } = {}) {
   if (!text) return;
   unlockAudioPlayback();
   if (cancelBefore) stopChineseSpeech();
@@ -327,8 +336,8 @@ export async function speakChineseWord(text, { rate = 0.82, cancelBefore = true 
       await playWavBlob(blob);
       return;
     } catch (e) {
-      if (e?.status === 503) primePiperTtsStatus(false);
-      console.warn('Piper TTS:', e?.message || e);
+      primePiperTtsStatus(false);
+      console.warn('Piper TTS failed, disabling for this session:', e?.message || e);
     }
   }
 
@@ -338,7 +347,7 @@ export async function speakChineseWord(text, { rate = 0.82, cancelBefore = true 
       .then((s) => primePiperTtsStatus(!!(s && s.available)))
       .catch(() => primePiperTtsStatus(false));
   }
-  speakBrowserWord(text, { rate });
+  speakBrowserWord(text, { rate, onError });
 }
 
 /**
@@ -374,8 +383,8 @@ export async function enqueueChineseLongText(text, { rate = 0.92, onComplete, on
     }
     onComplete?.();
   } catch (e) {
-    console.warn('Piper 长文朗读失败，改用浏览器语音', e);
-    stopBrowserSpeech();
+    primePiperTtsStatus(false);
+    console.warn('Piper 长文朗读失败, disabling for this session:', e?.message || e);
     enqueueBrowserLongText(text, { rate, onComplete, onError });
   }
 }

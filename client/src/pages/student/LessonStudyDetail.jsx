@@ -17,6 +17,7 @@ export default function LessonStudyDetail() {
 
   const [data, setData] = useState(null);
   const [reading, setReading] = useState(false);
+  const [ttsError, setTtsError] = useState('');
   const [wordForm, setWordForm] = useState({ word: '' });
   const [wordMsg, setWordMsg] = useState('');
   const ttsEngine = useTtsEngine();
@@ -39,11 +40,15 @@ export default function LessonStudyDetail() {
 
   const readFullText = useCallback(() => {
     if (!data?.content) return;
+    setTtsError('');
     setReading(true);
     void enqueueChineseLongText(data.content, {
       rate: 0.92,
       onComplete: () => setReading(false),
-      onError: () => setReading(false),
+      onError: () => {
+        setReading(false);
+        setTtsError('朗读失败：当前浏览器可能不支持中文语音，请尝试使用 Chrome 浏览器，或在系统设置中安装中文语音引擎。');
+      },
     });
   }, [data?.content, stopReading]);
 
@@ -124,6 +129,7 @@ export default function LessonStudyDetail() {
         >
           {reading ? '⏹ 停止朗读' : '🔊 朗读全文'}
         </button>
+        {ttsError && <p className="hint-text" style={{ color: '#c00', margin: '8px 0' }}>{ttsError}</p>}
         <div className="lesson-toolbar-tts">
           <TtsEngineBadge loading={ttsEngine.loading} piperAvailable={ttsEngine.piperAvailable} />
           <p className="hint-text lesson-toolbar-hint">

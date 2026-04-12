@@ -19,8 +19,8 @@ export default function DictationPractice() {
   const startTime = useRef(Date.now());
   const hwRef = useRef(null);
   const ttsEngine = useTtsEngine();
+  const [ttsError, setTtsError] = useState('');
 
-  /** 触屏设备上自动朗读不在用户手势内，会被系统静默拦截；桌面仍自动播一词 */
   const skipAutoSpeak = useMemo(
     () => typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches,
     []
@@ -37,7 +37,12 @@ export default function DictationPractice() {
 
   const speakPinyin = useCallback(() => {
     if (!word) return;
-    void speakChineseWord(word.word, { rate: 0.8, cancelBefore: true });
+    setTtsError('');
+    void speakChineseWord(word.word, {
+      rate: 0.8,
+      cancelBefore: true,
+      onError: () => setTtsError('朗读失败：请尝试使用 Chrome 浏览器，或检查系统中文语音设置。'),
+    });
   }, [word]);
 
   useEffect(() => {
@@ -137,6 +142,7 @@ export default function DictationPractice() {
       <p className="dictation-tts-line">
         <TtsEngineBadge compact loading={ttsEngine.loading} piperAvailable={ttsEngine.piperAvailable} />
       </p>
+      {ttsError && <p className="hint-text" style={{ color: '#c00', margin: '0 16px 8px', fontSize: '13px' }}>{ttsError}</p>}
 
       <div className="practice-area">
         <div className="pinyin-display">{word?.pinyin}</div>
