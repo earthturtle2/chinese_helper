@@ -725,12 +725,23 @@ button.login-gear-btn { appearance: none; }
   padding: 12px 28px;
   touch-action: manipulation;
   width: min(100%, 400px);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-inline: auto;
 }
 .dictation-practice .btn-speak {
   min-height: 48px;
   padding: 12px 24px;
   touch-action: manipulation;
   width: min(100%, 320px);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-inline: auto;
 }
 
 /* 田字格默写 */
