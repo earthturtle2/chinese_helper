@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../api';
 import TianZiGeHandwriting from '../../components/TianZiGeHandwriting';
@@ -20,6 +20,11 @@ export default function LessonDictationPractice() {
   const hwRef = useRef(null);
   const resultsRef = useRef([]);
   const ttsEngine = useTtsEngine();
+
+  const skipAutoSpeak = useMemo(
+    () => typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches,
+    []
+  );
 
   useEffect(() => {
     resultsRef.current = results;
@@ -51,10 +56,11 @@ export default function LessonDictationPractice() {
   }, [word]);
 
   useEffect(() => {
+    if (skipAutoSpeak) return;
     if (phase === 'practice' && word) {
       speakPinyin();
     }
-  }, [current, phase, word, speakPinyin]);
+  }, [current, phase, word, speakPinyin, skipAutoSpeak]);
 
   const finishWithResults = async (allResults) => {
     setPhase('submitting');
