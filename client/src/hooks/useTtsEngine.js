@@ -10,7 +10,7 @@ export function useTtsEngine() {
   const [state, setState] = useState({
     loading: true,
     piperAvailable: false,
-    preferredEngine: 'kokoro',
+    preferredEngine: 'piper',
   });
   useEffect(() => {
     let cancelled = false;
@@ -19,12 +19,12 @@ export function useTtsEngine() {
       .then((s) => {
         primeTtsFromStatus(s);
         const ok = !!(s && s.available);
-        const pe = String(s?.preferredEngine || 'kokoro').toLowerCase() === 'piper' ? 'piper' : 'kokoro';
+        const pe = String(s?.preferredEngine || 'piper').toLowerCase() === 'kokoro' ? 'kokoro' : 'piper';
         if (!cancelled) setState({ loading: false, piperAvailable: ok, preferredEngine: pe });
       })
       .catch(() => {
         primePiperTtsStatus(false);
-        if (!cancelled) setState({ loading: false, piperAvailable: false, preferredEngine: 'kokoro' });
+        if (!cancelled) setState({ loading: false, piperAvailable: false, preferredEngine: 'piper' });
       });
     return () => {
       cancelled = true;

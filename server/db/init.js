@@ -78,6 +78,16 @@ function migrateKokoroVoiceFromZf001(db) {
   }
 }
 
+/** 默认朗读改回 Piper：曾设为 kokoro 的改为 piper（避免浏览器加载超大 ONNX） */
+function migrateTtsEngineKokoroToPiper(db) {
+  const info = db
+    .prepare("UPDATE settings SET value = 'piper' WHERE key = 'tts_engine' AND trim(value) = 'kokoro'")
+    .run();
+  if (info.changes > 0) {
+    console.log('[DB] Migrated settings.tts_engine from kokoro to piper (default server TTS)');
+  }
+}
+
 function initDatabase() {
   ensureDir(DATA_DIR);
   ensureDir(config.uploadDir);
@@ -91,6 +101,7 @@ function initDatabase() {
   migrateRecitationVolume(db);
   migrateLessonStudy(db);
   migrateKokoroVoiceFromZf001(db);
+  migrateTtsEngineKokoroToPiper(db);
 
   const adminExists = db.prepare('SELECT id FROM admins LIMIT 1').get();
   if (!adminExists) {
@@ -119,7 +130,7 @@ function initDatabase() {
 
   const ttsEngine = db.prepare("SELECT value FROM settings WHERE key = 'tts_engine'").get();
   if (!ttsEngine) {
-    db.prepare("INSERT INTO settings (key, value) VALUES ('tts_engine', 'kokoro')").run();
+    db.prepare("INSERT INTO settings (key, value) VALUES ('tts_engine', 'piper')").run();
   }
   const kokoroVoice = db.prepare("SELECT value FROM settings WHERE key = 'kokoro_voice'").get();
   if (!kokoroVoice) {

@@ -66,15 +66,15 @@ export default function AdminDashboard() {
         <div className="setting-row">
           <span>学生端首选朗读</span>
           <select
-            value={settings.tts_engine === 'piper' ? 'piper' : 'kokoro'}
+            value={settings.tts_engine === 'kokoro' ? 'kokoro' : 'piper'}
             onChange={async (e) => {
               const v = e.target.value;
               await api.updateSetting('tts_engine', v);
               setSettings((s) => ({ ...s, tts_engine: v }));
             }}
           >
-            <option value="kokoro">Kokoro（浏览器，中文 ONNX，默认）</option>
-            <option value="piper">Piper（服务端本地神经网络）</option>
+            <option value="piper">Piper（服务端本地，默认）</option>
+            <option value="kokoro">Kokoro（浏览器 ONNX，体积大、首启慢）</option>
           </select>
         </div>
         <div className="setting-row">

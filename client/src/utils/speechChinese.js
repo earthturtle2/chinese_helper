@@ -1,5 +1,5 @@
 /**
- * 中文朗读：默认浏览器 Kokoro 中文 ONNX；管理端可选 Piper（服务端），否则回退 Web Speech API。
+ * 中文朗读：默认服务端 Piper；管理端可选 Kokoro（浏览器 ONNX，包体大）；否则回退 Web Speech API。
  *
  * 移动端核心约束（iOS Safari / Android WebView / 国产浏览器）：
  *
@@ -300,7 +300,7 @@ export async function playWavBlob(blob) {
 let piperResolved = null;
 
 /** @type {'kokoro'|'piper'} */
-let preferredTtsEngine = 'kokoro';
+let preferredTtsEngine = 'piper';
 
 let kokoroClientOptions = {
   modelId: 'onnx-community/Kokoro-82M-v1.1-zh-ONNX',
@@ -317,8 +317,8 @@ export function primePiperTtsStatus(available) {
 export function primeTtsFromStatus(s) {
   if (!s) return;
   primePiperTtsStatus(!!(s && s.available));
-  const pe = String(s.preferredEngine || 'kokoro').trim().toLowerCase();
-  preferredTtsEngine = pe === 'piper' ? 'piper' : 'kokoro';
+  const pe = String(s.preferredEngine || 'piper').trim().toLowerCase();
+  preferredTtsEngine = pe === 'kokoro' ? 'kokoro' : 'piper';
   if (s.kokoro && typeof s.kokoro === 'object') {
     kokoroClientOptions = {
       modelId: String(s.kokoro.modelId || kokoroClientOptions.modelId).trim() || kokoroClientOptions.modelId,

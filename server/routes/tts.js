@@ -43,8 +43,8 @@ function statusPayload(db) {
   else if (!binOk) reason = 'PIPER_BIN 路径无效';
   else if (!modelOk) reason = 'PIPER_MODEL 文件不存在（可先运行 npm run fetch-piper）';
   else if (!jsonOk) reason = '缺少与 .onnx 同名的 .onnx.json';
-  const rawEngine = getSetting(db, 'tts_engine', 'kokoro').toLowerCase();
-  const preferredEngine = rawEngine === 'piper' ? 'piper' : 'kokoro';
+  const rawEngine = getSetting(db, 'tts_engine', 'piper').toLowerCase();
+  const preferredEngine = rawEngine === 'kokoro' ? 'kokoro' : 'piper';
   return {
     available,
     engine: 'piper',

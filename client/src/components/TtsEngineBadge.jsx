@@ -1,7 +1,7 @@
 /**
  * 显示当前将优先使用的朗读方式（管理端 tts_engine + 服务端 Piper 是否就绪）。
  */
-export default function TtsEngineBadge({ loading, piperAvailable, preferredEngine = 'kokoro', compact = false }) {
+export default function TtsEngineBadge({ loading, piperAvailable, preferredEngine = 'piper', compact = false }) {
   if (loading) {
     return (
       <span className="tts-engine-badge tts-engine-loading" aria-live="polite">
