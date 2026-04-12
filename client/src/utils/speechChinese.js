@@ -304,7 +304,7 @@ let preferredTtsEngine = 'kokoro';
 
 let kokoroClientOptions = {
   modelId: 'onnx-community/Kokoro-82M-v1.1-zh-ONNX',
-  voice: 'zf_001',
+  voice: 'zm_yunjian',
 };
 
 export function primePiperTtsStatus(available) {
@@ -322,7 +322,7 @@ export function primeTtsFromStatus(s) {
   if (s.kokoro && typeof s.kokoro === 'object') {
     kokoroClientOptions = {
       modelId: String(s.kokoro.modelId || kokoroClientOptions.modelId).trim() || kokoroClientOptions.modelId,
-      voice: String(s.kokoro.voice || 'zf_001').trim() || 'zf_001',
+      voice: String(s.kokoro.voice || 'zm_yunjian').trim() || 'zm_yunjian',
     };
   }
 }

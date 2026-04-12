@@ -83,11 +83,11 @@ export default function AdminDashboard() {
             key={`kokoro-voice-${settings.kokoro_voice ?? ''}`}
             type="text"
             style={{ minWidth: '140px' }}
-            placeholder="zf_001"
-            defaultValue={settings.kokoro_voice || 'zf_001'}
+            placeholder="zm_yunjian"
+            defaultValue={settings.kokoro_voice || 'zm_yunjian'}
             onBlur={async (e) => {
-              const v = e.target.value.trim() || 'zf_001';
-              if (v === (settings.kokoro_voice || 'zf_001')) return;
+              const v = e.target.value.trim() || 'zm_yunjian';
+              if (v === (settings.kokoro_voice || 'zm_yunjian')) return;
               await api.updateSetting('kokoro_voice', v);
               setSettings((s) => ({ ...s, kokoro_voice: v }));
             }}

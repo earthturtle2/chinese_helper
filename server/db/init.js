@@ -66,6 +66,18 @@ function migrateLessonStudy(db) {
   }
 }
 
+/** 旧默认音色 zf_001 改为 zm_yunjian（与浏览器 ONNX 别名一致） */
+function migrateKokoroVoiceFromZf001(db) {
+  const info = db
+    .prepare(
+      "UPDATE settings SET value = 'zm_yunjian' WHERE key = 'kokoro_voice' AND trim(value) = 'zf_001'"
+    )
+    .run();
+  if (info.changes > 0) {
+    console.log('[DB] Migrated settings.kokoro_voice from zf_001 to zm_yunjian');
+  }
+}
+
 function initDatabase() {
   ensureDir(DATA_DIR);
   ensureDir(config.uploadDir);
@@ -78,6 +90,7 @@ function initDatabase() {
   db.exec(schema);
   migrateRecitationVolume(db);
   migrateLessonStudy(db);
+  migrateKokoroVoiceFromZf001(db);
 
   const adminExists = db.prepare('SELECT id FROM admins LIMIT 1').get();
   if (!adminExists) {
@@ -110,7 +123,7 @@ function initDatabase() {
   }
   const kokoroVoice = db.prepare("SELECT value FROM settings WHERE key = 'kokoro_voice'").get();
   if (!kokoroVoice) {
-    db.prepare("INSERT INTO settings (key, value) VALUES ('kokoro_voice', 'zf_001')").run();
+    db.prepare("INSERT INTO settings (key, value) VALUES ('kokoro_voice', 'zm_yunjian')").run();
   }
   const kokoroModel = db.prepare("SELECT value FROM settings WHERE key = 'kokoro_model_id'").get();
   if (!kokoroModel) {

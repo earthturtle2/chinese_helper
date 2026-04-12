@@ -52,7 +52,7 @@ function statusPayload(db) {
     preferredEngine,
     kokoro: {
       modelId: getSetting(db, 'kokoro_model_id', 'onnx-community/Kokoro-82M-v1.1-zh-ONNX'),
-      voice: getSetting(db, 'kokoro_voice', 'zf_001'),
+      voice: getSetting(db, 'kokoro_voice', 'zm_yunjian'),
     },
   };
 }

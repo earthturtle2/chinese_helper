@@ -1,6 +1,9 @@
 /**
  * 浏览器端 Kokoro 中文 ONNX（onnx-community/Kokoro-82M-v1.1-zh-ONNX）。
  * G2P 使用 phonemizer（eSpeak NG）的普通话模式；与 Python misaki[zh] 不完全一致，音质可能略差。
+ *
+ * 友好名（如 zm_yunjian）在 Python 仓库与 sherpa 说话人表一致；zh-ONNX 仓库多为 zf_、zm_ 加数字的 .bin。
+ * zm_yunjian 映射到 speaker 49 对应的 zf_049.bin（sherpa 文档：49 对应 zm_yunjian）。
  */
 import { phonemize } from 'phonemizer';
 
@@ -12,8 +15,50 @@ async function loadTransformers() {
   return transformersMod;
 }
 
+/** 友好音色 ID -> 当前 zh-ONNX 仓库内实际文件名（不含 .bin） */
+const KOKORO_ZH_VOICE_FILE_ALIASES = {
+  zm_yunjian: 'zf_049',
+};
+
+export function resolveKokoroZhVoiceFile(voice) {
+  const v = String(voice || '').trim();
+  if (!v) return v;
+  return KOKORO_ZH_VOICE_FILE_ALIASES[v] || v;
+}
+
 const modelEntryCache = new Map();
 const voiceDataCache = new Map();
+
+let onnxEnvConfigured = false;
+
+function hasWebGpu() {
+  return typeof navigator !== 'undefined' && Boolean(navigator.gpu);
+}
+
+/** 首次加载前配置 ONNX WASM / WebGPU，减轻主线程压力并尽量用 SIMD 路径 */
+function configureKokoroOnnxEnv(env) {
+  if (onnxEnvConfigured || !env?.backends?.onnx) return;
+  onnxEnvConfigured = true;
+  const onnx = env.backends.onnx;
+  try {
+    if (onnx.wasm) {
+      const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4;
+      if ('numThreads' in onnx.wasm && onnx.wasm.numThreads == null) {
+        onnx.wasm.numThreads = Math.min(4, Math.max(1, cores));
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+const modelLoadAttempts = () => {
+  const wasm = { dtype: 'q8', device: 'wasm' };
+  const webgpuQ8 = { dtype: 'q8', device: 'webgpu' };
+  const webgpuFp32 = { dtype: 'fp32', device: 'webgpu' };
+  if (hasWebGpu()) return [webgpuQ8, wasm, webgpuFp32, { dtype: 'fp32', device: 'wasm' }];
+  return [wasm, { dtype: 'fp32', device: 'wasm' }];
+};
 
 let synthGeneration = 0;
 
@@ -49,10 +94,10 @@ export function splitTextForKokoro(text) {
   return out;
 }
 
-async function getVoiceStyleArray(modelId, voice) {
-  const key = `${modelId}::${voice}`;
+async function getVoiceStyleArray(modelId, voiceFile) {
+  const key = `${modelId}::${voiceFile}`;
   if (voiceDataCache.has(key)) return voiceDataCache.get(key);
-  const url = `https://huggingface.co/${modelId}/resolve/main/voices/${encodeURIComponent(voice)}.bin`;
+  const url = `https://huggingface.co/${modelId}/resolve/main/voices/${encodeURIComponent(voiceFile)}.bin`;
   let buffer;
   try {
     const cache = await caches.open('kokoro-zh-voices');
@@ -63,7 +108,7 @@ async function getVoiceStyleArray(modelId, voice) {
   }
   if (!buffer) {
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`无法加载 Kokoro 音色：${voice}`);
+    if (!res.ok) throw new Error(`无法加载 Kokoro 音色：${voiceFile}`);
     buffer = await res.arrayBuffer();
     try {
       const cache = await caches.open('kokoro-zh-voices');
@@ -79,12 +124,29 @@ async function getVoiceStyleArray(modelId, voice) {
 
 async function loadModelAndTokenizer(modelId, progress_callback) {
   if (modelEntryCache.has(modelId)) return modelEntryCache.get(modelId);
-  const { StyleTextToSpeech2Model, AutoTokenizer } = await loadTransformers();
-  const opts = { dtype: 'fp32', progress_callback };
-  const [model, tokenizer] = await Promise.all([
-    StyleTextToSpeech2Model.from_pretrained(modelId, opts),
-    AutoTokenizer.from_pretrained(modelId, { progress_callback }),
-  ]);
+  const { StyleTextToSpeech2Model, AutoTokenizer, env } = await loadTransformers();
+  configureKokoroOnnxEnv(env);
+
+  const tokenizer = await AutoTokenizer.from_pretrained(modelId, { progress_callback });
+
+  let model = null;
+  let loadError = null;
+  for (const extra of modelLoadAttempts()) {
+    try {
+      model = await StyleTextToSpeech2Model.from_pretrained(modelId, {
+        ...extra,
+        progress_callback,
+      });
+      loadError = null;
+      break;
+    } catch (e) {
+      loadError = e;
+    }
+  }
+  if (!model) {
+    throw loadError || new Error('Kokoro 模型加载失败');
+  }
+
   const entry = { model, tokenizer };
   modelEntryCache.set(modelId, entry);
   return entry;
@@ -104,9 +166,10 @@ async function textToPhonemeString(text) {
 /**
  * 合成单段文本为 RawAudio（24kHz），需已解锁 AudioContext 的页面环境。
  */
-export async function synthesizeKokoroZh(text, { modelId, voice = 'zf_001', speed = 1, progress_callback } = {}) {
+export async function synthesizeKokoroZh(text, { modelId, voice = 'zm_yunjian', speed = 1, progress_callback } = {}) {
   const gen = synthGeneration;
   const mid = modelId || 'onnx-community/Kokoro-82M-v1.1-zh-ONNX';
+  const voiceFile = resolveKokoroZhVoiceFile(voice);
   const { model, tokenizer } = await loadModelAndTokenizer(mid, progress_callback);
   assertNotAborted(gen);
 
@@ -114,14 +177,15 @@ export async function synthesizeKokoroZh(text, { modelId, voice = 'zf_001', spee
   assertNotAborted(gen);
   if (!phonemes) throw new Error('音素为空');
 
-  const { Tensor, RawAudio } = await loadTransformers();
+  const mod = await loadTransformers();
+  const { Tensor, RawAudio } = mod;
   const tokenized = tokenizer(phonemes, { truncation: true });
   const input_ids = tokenized.input_ids;
   const dims = input_ids.dims;
   const lastDim = dims && dims.length ? dims[dims.length - 1] : 0;
   const offset = 256 * Math.min(Math.max(lastDim - 2, 0), 509);
 
-  const voiceData = await getVoiceStyleArray(mid, voice);
+  const voiceData = await getVoiceStyleArray(mid, voiceFile);
   assertNotAborted(gen);
   if (offset + 256 > voiceData.length) {
     throw new Error('音色数据与输入长度不匹配');
