@@ -63,6 +63,53 @@ export default function AdminDashboard() {
           <span>默认每日时长限制</span>
           <span>{settings.default_daily_limit || 40} 分钟</span>
         </div>
+        <div className="setting-row">
+          <span>学生端首选朗读</span>
+          <select
+            value={settings.tts_engine === 'piper' ? 'piper' : 'kokoro'}
+            onChange={async (e) => {
+              const v = e.target.value;
+              await api.updateSetting('tts_engine', v);
+              setSettings((s) => ({ ...s, tts_engine: v }));
+            }}
+          >
+            <option value="kokoro">Kokoro（浏览器，中文 ONNX，默认）</option>
+            <option value="piper">Piper（服务端本地神经网络）</option>
+          </select>
+        </div>
+        <div className="setting-row">
+          <span>Kokoro 音色 ID</span>
+          <input
+            key={`kokoro-voice-${settings.kokoro_voice ?? ''}`}
+            type="text"
+            style={{ minWidth: '140px' }}
+            placeholder="zf_001"
+            defaultValue={settings.kokoro_voice || 'zf_001'}
+            onBlur={async (e) => {
+              const v = e.target.value.trim() || 'zf_001';
+              if (v === (settings.kokoro_voice || 'zf_001')) return;
+              await api.updateSetting('kokoro_voice', v);
+              setSettings((s) => ({ ...s, kokoro_voice: v }));
+            }}
+          />
+        </div>
+        <div className="setting-row">
+          <span>Kokoro 模型（Hugging Face ID）</span>
+          <input
+            key={`kokoro-model-${settings.kokoro_model_id ?? ''}`}
+            type="text"
+            style={{ minWidth: '280px', maxWidth: '100%' }}
+            placeholder="onnx-community/Kokoro-82M-v1.1-zh-ONNX"
+            defaultValue={settings.kokoro_model_id || 'onnx-community/Kokoro-82M-v1.1-zh-ONNX'}
+            onBlur={async (e) => {
+              const def = 'onnx-community/Kokoro-82M-v1.1-zh-ONNX';
+              const v = e.target.value.trim() || def;
+              if (v === (settings.kokoro_model_id || def)) return;
+              await api.updateSetting('kokoro_model_id', v);
+              setSettings((s) => ({ ...s, kokoro_model_id: v }));
+            }}
+          />
+        </div>
       </div>
     </div>
   );

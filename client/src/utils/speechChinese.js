@@ -1,5 +1,5 @@
 /**
- * 中文朗读：优先使用服务端 Piper（本地神经网络），不可用时回退到 Web Speech API。
+ * 中文朗读：默认浏览器 Kokoro 中文 ONNX；管理端可选 Piper（服务端），否则回退 Web Speech API。
  *
  * 移动端核心约束（iOS Safari / Android WebView / 国产浏览器）：
  *
@@ -13,13 +13,14 @@
  *
  * 策略：
  *   - unlockAudioPlayback() 在手势内同步调用：
- *     a) 解锁 AudioContext（供 Piper WAV）
+ *     a) 解锁 AudioContext（供 Kokoro / Piper 的 WAV）
  *     b) 首次 speechSynthesis.speak() 激活引擎（warmup）
  *   - 浏览器 TTS 的 speak() 延迟 150ms，避开 cancel-speak 竞态
- *   - Piper WAV 通过已解锁的 AudioContext.decodeAudioData 播放
+ *   - Kokoro / Piper 返回的 WAV 通过已解锁的 AudioContext.decodeAudioData 播放
  */
 
 import { api } from '../api';
+import { abortKokoroSynthesis, synthesizeKokoroZh, splitTextForKokoro } from './kokoroZhTts';
 
 /* ─── voice 管理 ─── */
 
@@ -168,7 +169,7 @@ export function unlockAudioPlayback() {
  * 通过已解锁的 AudioContext 播放 WAV blob（Piper 返回值）。
  * AudioContext 在 resume() 后不受后续异步限制。
  */
-async function playWavBlob(blob) {
+export async function playWavBlob(blob) {
   if (sharedAudioCtx) {
     try {
       if (sharedAudioCtx.state === 'suspended') await sharedAudioCtx.resume();
@@ -217,14 +218,40 @@ async function playWavBlob(blob) {
 
 let piperResolved = null;
 
+/** @type {'kokoro'|'piper'} */
+let preferredTtsEngine = 'kokoro';
+
+let kokoroClientOptions = {
+  modelId: 'onnx-community/Kokoro-82M-v1.1-zh-ONNX',
+  voice: 'zf_001',
+};
+
 export function primePiperTtsStatus(available) {
   piperResolved = !!available;
 }
 
+/**
+ * 与 /api/tts/status 对齐：首选引擎（Kokoro 浏览器 / Piper 服务端）及 Kokoro 参数。
+ */
+export function primeTtsFromStatus(s) {
+  if (!s) return;
+  primePiperTtsStatus(!!(s && s.available));
+  const pe = String(s.preferredEngine || 'kokoro').trim().toLowerCase();
+  preferredTtsEngine = pe === 'piper' ? 'piper' : 'kokoro';
+  if (s.kokoro && typeof s.kokoro === 'object') {
+    kokoroClientOptions = {
+      modelId: String(s.kokoro.modelId || kokoroClientOptions.modelId).trim() || kokoroClientOptions.modelId,
+      voice: String(s.kokoro.voice || 'zf_001').trim() || 'zf_001',
+    };
+  }
+}
+
 void api
   .getTtsStatus()
-  .then((s) => primePiperTtsStatus(!!(s && s.available)))
-  .catch(() => { if (piperResolved === null) primePiperTtsStatus(false); });
+  .then((s) => primeTtsFromStatus(s))
+  .catch(() => {
+    if (piperResolved === null) primePiperTtsStatus(false);
+  });
 
 /* ─── 浏览器 TTS（带 cancel-speak 竞态保护） ─── */
 
@@ -323,12 +350,23 @@ function sleep(ms) {
 
 /**
  * 朗读短文本（生词、单句）。
- * onError 可选：当 Piper 和浏览器 TTS 都失败时触发。
+ * onError 可选：当 Kokoro、Piper 与浏览器 TTS 都失败时触发。
  */
 export async function speakChineseWord(text, { rate = 0.82, cancelBefore = true, onError } = {}) {
   if (!text) return;
   unlockAudioPlayback();
   if (cancelBefore) stopChineseSpeech();
+
+  if (preferredTtsEngine === 'kokoro') {
+    try {
+      const raw = await synthesizeKokoroZh(text, kokoroClientOptions);
+      await playWavBlob(raw.toBlob());
+      return;
+    } catch (e) {
+      if (e?.name === 'AbortError') return;
+      console.warn('Kokoro TTS failed:', e?.message || e);
+    }
+  }
 
   if (piperResolved === true) {
     try {
@@ -344,19 +382,37 @@ export async function speakChineseWord(text, { rate = 0.82, cancelBefore = true,
   if (piperResolved === null) {
     void api
       .getTtsStatus()
-      .then((s) => primePiperTtsStatus(!!(s && s.available)))
+      .then((s) => primeTtsFromStatus(s))
       .catch(() => primePiperTtsStatus(false));
   }
   speakBrowserWord(text, { rate, onError });
 }
 
 /**
- * 长文朗读：优先 Piper → WebAudio；否则浏览器 TTS 分段入队。
+ * 长文朗读：首选 Kokoro 时分段合成；否则 Piper → WebAudio；再否则浏览器 TTS。
  */
 export async function enqueueChineseLongText(text, { rate = 0.92, onComplete, onError } = {}) {
   unlockAudioPlayback();
   stopChineseSpeech();
   if (!String(text || '').trim()) { onComplete?.(); return; }
+
+  if (preferredTtsEngine === 'kokoro') {
+    try {
+      const parts = splitTextForKokoro(text);
+      for (let i = 0; i < parts.length; i++) {
+        const chunk = parts[i];
+        if (!chunk.trim()) continue;
+        const raw = await synthesizeKokoroZh(chunk, kokoroClientOptions);
+        await playWavBlob(raw.toBlob());
+        if (i < parts.length - 1) await sleep(120);
+      }
+      onComplete?.();
+      return;
+    } catch (e) {
+      if (e?.name === 'AbortError') return;
+      console.warn('Kokoro 长文朗读失败:', e?.message || e);
+    }
+  }
 
   if (piperResolved === false) {
     enqueueBrowserLongText(text, { rate, onComplete, onError });
@@ -366,7 +422,7 @@ export async function enqueueChineseLongText(text, { rate = 0.92, onComplete, on
   if (piperResolved === null) {
     void api
       .getTtsStatus()
-      .then((s) => primePiperTtsStatus(!!(s && s.available)))
+      .then((s) => primeTtsFromStatus(s))
       .catch(() => primePiperTtsStatus(false));
     enqueueBrowserLongText(text, { rate, onComplete, onError });
     return;
@@ -390,6 +446,7 @@ export async function enqueueChineseLongText(text, { rate = 0.92, onComplete, on
 }
 
 export function stopChineseSpeech() {
+  abortKokoroSynthesis();
   cancelBrowserSpeechTimer();
   stopBrowserSpeech();
   if (currentSource) {

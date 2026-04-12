@@ -1,26 +1,30 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
-import { primePiperTtsStatus } from '../utils/speechChinese';
+import { primeTtsFromStatus, primePiperTtsStatus } from '../utils/speechChinese';
 
 /**
- * 探测服务端 Piper 是否可用（与 /api/tts/status 一致）。
- * 实际播放时若请求失败仍会回退浏览器，此处表示「将优先尝试」的引擎。
+ * 与 /api/tts/status 一致：首选引擎（Kokoro / Piper）及 Piper 是否就绪。
  * 同步到 speechChinese，避免用户点击「朗读」时再 await 状态接口而破坏 iOS 手势链。
  */
 export function useTtsEngine() {
-  const [state, setState] = useState({ loading: true, piperAvailable: false });
+  const [state, setState] = useState({
+    loading: true,
+    piperAvailable: false,
+    preferredEngine: 'kokoro',
+  });
   useEffect(() => {
     let cancelled = false;
     api
       .getTtsStatus()
       .then((s) => {
+        primeTtsFromStatus(s);
         const ok = !!(s && s.available);
-        primePiperTtsStatus(ok);
-        if (!cancelled) setState({ loading: false, piperAvailable: ok });
+        const pe = String(s?.preferredEngine || 'kokoro').toLowerCase() === 'piper' ? 'piper' : 'kokoro';
+        if (!cancelled) setState({ loading: false, piperAvailable: ok, preferredEngine: pe });
       })
       .catch(() => {
         primePiperTtsStatus(false);
-        if (!cancelled) setState({ loading: false, piperAvailable: false });
+        if (!cancelled) setState({ loading: false, piperAvailable: false, preferredEngine: 'kokoro' });
       });
     return () => {
       cancelled = true;

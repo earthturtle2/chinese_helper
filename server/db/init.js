@@ -104,6 +104,21 @@ function initDatabase() {
     );
   }
 
+  const ttsEngine = db.prepare("SELECT value FROM settings WHERE key = 'tts_engine'").get();
+  if (!ttsEngine) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('tts_engine', 'kokoro')").run();
+  }
+  const kokoroVoice = db.prepare("SELECT value FROM settings WHERE key = 'kokoro_voice'").get();
+  if (!kokoroVoice) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('kokoro_voice', 'zf_001')").run();
+  }
+  const kokoroModel = db.prepare("SELECT value FROM settings WHERE key = 'kokoro_model_id'").get();
+  if (!kokoroModel) {
+    db.prepare(
+      "INSERT INTO settings (key, value) VALUES ('kokoro_model_id', 'onnx-community/Kokoro-82M-v1.1-zh-ONNX')"
+    ).run();
+  }
+
   seedSampleWordList(db);
 
   console.log('[DB] Database initialized successfully');

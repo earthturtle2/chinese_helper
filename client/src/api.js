@@ -74,7 +74,7 @@ export const api = {
   me: () => request('/me'),
   updateStudentProfile: (body) => request('/student/profile', { method: 'PUT', body: JSON.stringify(body) }),
 
-  /** Piper TTS 状态（无需登录） */
+  /** TTS 状态：Piper 是否就绪、首选引擎（kokoro|piper）、Kokoro 模型与音色（无需登录） */
   getTtsStatus: async () => {
     const url = `${BASE}/tts/status`;
     const res = await fetch(url);

@@ -22,7 +22,15 @@ function sanitizeText(raw) {
   return t.slice(0, MAX_CHARS);
 }
 
-function statusPayload() {
+function getSetting(db, key, defaultValue) {
+  if (!db) return defaultValue;
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+  const v = row?.value;
+  if (v == null || String(v).trim() === '') return defaultValue;
+  return String(v).trim();
+}
+
+function statusPayload(db) {
   const bin = config.piperBin;
   const modelPath = config.piperModel;
   const configured = isConfigured(config);
@@ -35,18 +43,25 @@ function statusPayload() {
   else if (!binOk) reason = 'PIPER_BIN 路径无效';
   else if (!modelOk) reason = 'PIPER_MODEL 文件不存在（可先运行 npm run fetch-piper）';
   else if (!jsonOk) reason = '缺少与 .onnx 同名的 .onnx.json';
+  const rawEngine = getSetting(db, 'tts_engine', 'kokoro').toLowerCase();
+  const preferredEngine = rawEngine === 'piper' ? 'piper' : 'kokoro';
   return {
     available,
     engine: 'piper',
     reason: available ? null : reason,
+    preferredEngine,
+    kokoro: {
+      modelId: getSetting(db, 'kokoro_model_id', 'onnx-community/Kokoro-82M-v1.1-zh-ONNX'),
+      voice: getSetting(db, 'kokoro_voice', 'zf_001'),
+    },
   };
 }
 
-module.exports = function ttsRoutes() {
+module.exports = function ttsRoutes(db) {
   const router = express.Router();
 
   router.get('/status', (req, res) => {
-    res.json(statusPayload());
+    res.json(statusPayload(db));
   });
 
   router.post('/speak', authenticate, ttsLimiter, async (req, res) => {
@@ -55,7 +70,7 @@ module.exports = function ttsRoutes() {
       return res.status(400).json({ error: '请提供非空文本' });
     }
 
-    const st = statusPayload();
+    const st = statusPayload(db);
     if (!st.available) {
       return res.status(503).json({ error: st.reason || '朗读服务不可用' });
     }

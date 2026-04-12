@@ -615,6 +615,11 @@ button.login-gear-btn { appearance: none; }
   background: var(--border);
   color: var(--text-light);
 }
+.tts-engine-kokoro {
+  background: #F3E5F5;
+  color: #6A1B9A;
+  border: 1px solid #CE93D8;
+}
 .tts-engine-piper {
   background: #E8F5E9;
   color: #2E7D32;

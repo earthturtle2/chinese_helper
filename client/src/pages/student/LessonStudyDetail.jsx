@@ -131,13 +131,19 @@ export default function LessonStudyDetail() {
         </button>
         {ttsError && <p className="hint-text" style={{ color: '#c00', margin: '8px 0' }}>{ttsError}</p>}
         <div className="lesson-toolbar-tts">
-          <TtsEngineBadge loading={ttsEngine.loading} piperAvailable={ttsEngine.piperAvailable} />
+          <TtsEngineBadge
+            loading={ttsEngine.loading}
+            piperAvailable={ttsEngine.piperAvailable}
+            preferredEngine={ttsEngine.preferredEngine}
+          />
           <p className="hint-text lesson-toolbar-hint">
             {ttsEngine.loading
               ? '正在检测朗读方式…'
-              : ttsEngine.piperAvailable
-                ? '将优先使用 Piper 合成全文（长文按句分段）。Piper 对多音字、声调的预测有限，可能与教材不完全一致；更贴近系统发音时可请管理员停用服务端 Piper。'
-                : '将使用浏览器调用的系统中文语音；长课文会自动分段。可在系统设置中更换语音。'}
+              : ttsEngine.preferredEngine === 'kokoro'
+                ? '将优先在浏览器内使用 Kokoro 中文 ONNX（长文自动分段；首次加载模型可能较慢）。失败时会依次尝试 Piper（若已配置）与系统语音。'
+                : ttsEngine.piperAvailable
+                  ? '将优先使用 Piper 合成全文（长文按句分段）。Piper 对多音字、声调的预测有限，可能与教材不完全一致；更贴近系统发音时可请管理员改为 Kokoro 或浏览器朗读。'
+                  : '将使用浏览器调用的系统中文语音；长课文会自动分段。可在系统设置中更换语音。'}
           </p>
         </div>
       </div>

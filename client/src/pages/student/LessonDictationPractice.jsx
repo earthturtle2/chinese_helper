@@ -187,7 +187,12 @@ export default function LessonDictationPractice() {
       </div>
 
       <p className="dictation-tts-line">
-        <TtsEngineBadge compact loading={ttsEngine.loading} piperAvailable={ttsEngine.piperAvailable} />
+        <TtsEngineBadge
+          compact
+          loading={ttsEngine.loading}
+          piperAvailable={ttsEngine.piperAvailable}
+          preferredEngine={ttsEngine.preferredEngine}
+        />
       </p>
       {ttsError && <p className="hint-text" style={{ color: '#c00', margin: '0 16px 8px', fontSize: '13px' }}>{ttsError}</p>}
 
