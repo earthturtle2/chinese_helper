@@ -1,5 +1,10 @@
 /**
- * 下载 Piper 中文女声（小雅 xiao_ya medium）模型到 models/piper/。
+ * 下载 Piper 中文模型到 models/piper/。
+ *
+ * 默认下载 huayan（花言 medium）——使用 espeak 音素，兼容 C++ piper 二进制。
+ * xiao_ya（小雅）使用 pinyin 音素类型，仅兼容 Python piper-tts ≥1.4，
+ * 若用 C++ 二进制会报 "is not a single codepoint" 崩溃。
+ *
  * 仍需从 https://github.com/rhasspy/piper/releases 下载对应平台的 piper 可执行文件，并设置 .env 中 PIPER_BIN。
  *
  * 网络超时 / 无法访问 huggingface.co 时：
@@ -16,7 +21,26 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.join(__dirname, '..');
 dotenv.config({ path: path.join(projectRoot, '.env') });
 
-const files = ['zh_CN-xiao_ya-medium.onnx', 'zh_CN-xiao_ya-medium.onnx.json'];
+const VOICE = process.env.PIPER_VOICE || 'huayan';
+
+const VOICES = {
+  huayan: {
+    files: ['zh_CN-huayan-medium.onnx', 'zh_CN-huayan-medium.onnx.json'],
+    path: 'zh/zh_CN/huayan/medium',
+    note: '花言（espeak 音素，兼容 C++ piper 二进制）',
+  },
+  xiao_ya: {
+    files: ['zh_CN-xiao_ya-medium.onnx', 'zh_CN-xiao_ya-medium.onnx.json'],
+    path: 'zh/zh_CN/xiao_ya/medium',
+    note: '小雅（pinyin 音素，仅兼容 Python piper-tts ≥1.4，C++ 二进制会崩溃）',
+  },
+};
+
+const voice = VOICES[VOICE];
+if (!voice) {
+  console.error(`未知语音: ${VOICE}。可选: ${Object.keys(VOICES).join(', ')}`);
+  process.exit(1);
+}
 
 function hfBase() {
   const raw = (process.env.HF_ENDPOINT || process.env.PIPER_HF_ENDPOINT || 'https://huggingface.co').trim();
@@ -24,7 +48,7 @@ function hfBase() {
 }
 
 function buildUrl(baseHost, filename) {
-  return `${baseHost}/rhasspy/piper-voices/resolve/main/zh/zh_CN/xiao_ya/medium/${filename}`;
+  return `${baseHost}/rhasspy/piper-voices/resolve/main/${voice.path}/${filename}`;
 }
 
 function sleep(ms) {
@@ -76,7 +100,7 @@ function printManualHelp(host) {
   const h = host.replace(/\/$/, '');
   console.error('\n--- 手动下载 ---');
   console.error('将下列文件保存到项目目录 models/piper/ ，文件名须完全一致：');
-  for (const f of files) {
+  for (const f of voice.files) {
     console.error(`  ${buildUrl(h, f)}`);
   }
   console.error('\n国内可尝试将 HF_ENDPOINT=https://hf-mirror.com 写入 .env 后重新运行 npm run fetch-piper');
@@ -89,6 +113,7 @@ async function main() {
   const onnxTimeout = 900000;
   const jsonTimeout = 120000;
 
+  console.log(`语音: ${VOICE}（${voice.note}）`);
   console.log(`使用下载源: ${host}`);
   if (host.includes('huggingface.co')) {
     console.log('若连接超时，可在 .env 中设置 HF_ENDPOINT=https://hf-mirror.com 后重试。\n');
@@ -96,7 +121,7 @@ async function main() {
 
   try {
     await fs.mkdir(root, { recursive: true });
-    for (const f of files) {
+    for (const f of voice.files) {
       const url = buildUrl(host, f);
       const dest = path.join(root, f);
       const timeoutMs = f.endsWith('.json') ? jsonTimeout : onnxTimeout;
