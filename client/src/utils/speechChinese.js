@@ -30,24 +30,24 @@ let currentAudio = null;
 /** null=未探测, true=Piper 可用, false=不可用 */
 let piperResolved = null;
 
-let audioUnlockDone = false;
+/** 复用同一 AudioContext，避免国产浏览器多次 new 导致异常；每次手势内 resume */
+let sharedAudioCtx = null;
 
 /**
  * 在用户点击等手势回调内同步调用（勿 await 之后再调）。
- * 解锁后同页的 Audio.play() 更易通过系统策略；与 Piper 返回的 blob 播放配合使用。
+ * 国产 Android 自带浏览器常拦截首次播放；若只解锁一次且失败会全程无声，因此每次朗读都尝试解锁。
  */
 export function unlockAudioPlayback() {
-  if (typeof window === 'undefined' || audioUnlockDone) return;
-  audioUnlockDone = true;
+  if (typeof window === 'undefined') return;
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (Ctx) {
-      const ctx = new Ctx();
-      if (ctx.state === 'suspended') void ctx.resume();
-      const buffer = ctx.createBuffer(1, 1, 22050);
-      const src = ctx.createBufferSource();
+      if (!sharedAudioCtx) sharedAudioCtx = new Ctx();
+      if (sharedAudioCtx.state === 'suspended') void sharedAudioCtx.resume();
+      const buffer = sharedAudioCtx.createBuffer(1, 1, 22050);
+      const src = sharedAudioCtx.createBufferSource();
       src.buffer = buffer;
-      src.connect(ctx.destination);
+      src.connect(sharedAudioCtx.destination);
       src.start(0);
     }
   } catch {
@@ -55,12 +55,33 @@ export function unlockAudioPlayback() {
   }
   try {
     const a = new Audio(SILENT_WAV);
-    a.volume = 0.001;
+    a.volume = 0.01;
     if ('playsInline' in a) a.playsInline = true;
+    a.setAttribute?.('playsinline', '');
+    a.setAttribute?.('webkit-playsinline', '');
     void a.play().catch(() => {});
   } catch {
     /* ignore */
   }
+}
+
+/**
+ * Android / WebView 上常见：首次 getVoices 为空、合成处于 paused；需在用户手势内 resume 并刷新列表。
+ */
+function prepareBrowserTts() {
+  if (typeof speechSynthesis === 'undefined') return;
+  try {
+    speechSynthesis.resume();
+  } catch {
+    /* ignore */
+  }
+  try {
+    speechSynthesis.getVoices();
+    speechSynthesis.getVoices();
+  } catch {
+    /* ignore */
+  }
+  refreshVoices();
 }
 
 /** 与 useTtsEngine 探测结果同步，避免朗读时再 await /tts/status 打断用户手势 */
@@ -94,8 +115,13 @@ export function pickPreferredZhVoice(voices) {
 }
 
 function getZhVoice() {
-  const voices = cachedVoices.length ? cachedVoices : typeof speechSynthesis !== 'undefined' ? speechSynthesis.getVoices() : [];
-  return pickPreferredZhVoice(voices);
+  const raw =
+    typeof speechSynthesis !== 'undefined'
+      ? cachedVoices.length
+        ? cachedVoices
+        : speechSynthesis.getVoices()
+      : [];
+  return pickPreferredZhVoice(raw);
 }
 
 /** 按句号等切分；无标点长段再按长度切开，便于浏览器 TTS 队列播放 */
@@ -177,23 +203,42 @@ function stopBrowserSpeech() {
 function playWavBlob(blob) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
+    const audio = document.createElement('audio');
+    audio.preload = 'auto';
+    audio.volume = 1;
     if ('playsInline' in audio) audio.playsInline = true;
-    audio.setAttribute?.('playsinline', '');
+    audio.setAttribute('playsinline', '');
+    audio.setAttribute('webkit-playsinline', '');
+    audio.src = url;
     currentAudio = audio;
-    audio.onended = () => {
+    const cleanup = () => {
       URL.revokeObjectURL(url);
+      audio.remove();
       if (currentAudio === audio) currentAudio = null;
-      resolve();
     };
-    audio.onerror = () => {
-      URL.revokeObjectURL(url);
-      if (currentAudio === audio) currentAudio = null;
-      reject(new Error('audio playback'));
-    };
+    audio.addEventListener(
+      'ended',
+      () => {
+        cleanup();
+        resolve();
+      },
+      { once: true }
+    );
+    audio.addEventListener(
+      'error',
+      () => {
+        cleanup();
+        reject(new Error('audio playback'));
+      },
+      { once: true }
+    );
+    try {
+      document.body.appendChild(audio);
+    } catch {
+      /* ignore */
+    }
     audio.play().catch((e) => {
-      URL.revokeObjectURL(url);
-      if (currentAudio === audio) currentAudio = null;
+      cleanup();
       reject(e);
     });
   });
@@ -201,12 +246,26 @@ function playWavBlob(blob) {
 
 function speakBrowserWord(text, { rate = 0.82 } = {}) {
   if (typeof speechSynthesis === 'undefined' || !text) return;
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'zh-CN';
-  u.rate = rate;
-  const voice = getZhVoice();
-  if (voice) u.voice = voice;
-  speechSynthesis.speak(u);
+  const run = () => {
+    prepareBrowserTts();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-CN';
+    u.rate = rate;
+    u.volume = 1;
+    const voice = getZhVoice();
+    if (voice) u.voice = voice;
+    speechSynthesis.speak(u);
+  };
+  prepareBrowserTts();
+  const noVoicesYet =
+    speechSynthesis.getVoices().length === 0 && cachedVoices.length === 0;
+  if (noVoicesYet) {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(run);
+    });
+    return;
+  }
+  run();
 }
 
 /**
@@ -244,9 +303,20 @@ export async function speakChineseWord(text, { rate = 0.82, cancelBefore = true 
   speakBrowserWord(text, { rate });
 }
 
-function enqueueBrowserLongText(text, { rate = 0.92, onComplete, onError } = {}) {
+function enqueueBrowserLongText(text, { rate = 0.92, onComplete, onError } = {}, voiceWarmupPass = 0) {
   if (typeof speechSynthesis === 'undefined') {
     onComplete?.();
+    return;
+  }
+  prepareBrowserTts();
+  const noVoicesYet =
+    speechSynthesis.getVoices().length === 0 && cachedVoices.length === 0;
+  if (noVoicesYet && voiceWarmupPass === 0) {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() =>
+        enqueueBrowserLongText(text, { rate, onComplete, onError }, 1)
+      );
+    });
     return;
   }
   const chunks = splitTextForTts(text);
@@ -259,6 +329,7 @@ function enqueueBrowserLongText(text, { rate = 0.92, onComplete, onError } = {})
     const u = new SpeechSynthesisUtterance(chunk);
     u.lang = 'zh-CN';
     u.rate = rate;
+    u.volume = 1;
     if (voice) u.voice = voice;
     const last = i === chunks.length - 1;
     if (last) {
@@ -319,8 +390,25 @@ export async function enqueueChineseLongText(text, { rate = 0.92, onComplete, on
 export function stopChineseSpeech() {
   stopBrowserSpeech();
   if (currentAudio) {
-    currentAudio.pause();
-    currentAudio.src = '';
+    const el = currentAudio;
+    const src = el.src || '';
+    try {
+      el.pause();
+    } catch {
+      /* ignore */
+    }
+    try {
+      el.remove?.();
+    } catch {
+      /* ignore */
+    }
+    if (src.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(src);
+      } catch {
+        /* ignore */
+      }
+    }
     currentAudio = null;
   }
 }
