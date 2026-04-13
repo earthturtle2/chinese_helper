@@ -35,6 +35,10 @@ export default function Layout() {
 
   const roleLabel = { admin: '管理员', student: '同学', parent: '家长' };
 
+  const dailyLimit = user?.dailyLimit ?? 40;
+  const showDailyLimitReminder =
+    user?.role === 'student' && Number(user?.todayUsage || 0) >= dailyLimit;
+
   return (
     <div className="app-layout">
       <header className="app-header">
@@ -68,6 +72,12 @@ export default function Layout() {
         </div>
       </header>
       <main className="app-main">
+        {showDailyLimitReminder && (
+          <div className="daily-limit-banner" role="status">
+            今日学习时长已达每日建议上限（{dailyLimit}
+            分钟），请注意休息。你仍可继续学习。
+          </div>
+        )}
         <Outlet key={location.pathname} />
       </main>
     </div>

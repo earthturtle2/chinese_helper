@@ -14,15 +14,7 @@ function usageTracker(db) {
     const globalLimit = db.prepare("SELECT value FROM settings WHERE key = 'default_daily_limit'").get();
     const limit = student?.daily_limit ?? parseInt(globalLimit?.value ?? config.defaultDailyLimit, 10);
 
-    if (used >= limit) {
-      return res.status(429).json({
-        error: '今天的学习任务已经完成啦，明天再来！',
-        code: 'DAILY_LIMIT_REACHED',
-        used,
-        limit
-      });
-    }
-
+    /** 仅记录用量与上限，供前端「已达建议时长」提醒；不拦截请求，学生可继续学习 */
     req.usageInfo = { used, limit };
     next();
   };
