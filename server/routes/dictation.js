@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { recordUsage } = require('../middleware/usageTracker');
-const { normalizeVolume } = require('../utils/volume');
+const { normalizeVolume, normalizeTextbookVersion } = require('../utils/volume');
 
 module.exports = function dictationRoutes(db) {
   const router = Router();
@@ -47,7 +47,13 @@ module.exports = function dictationRoutes(db) {
     if (!student) return res.status(404).json({ error: '学生不存在' });
     const showAll =
       req.query.all === '1' || req.query.all === 'true' || req.query.showAll === '1';
-    const textbookVersion = req.query.textbookVersion || student.textbook_version;
+    const hasQueryTv =
+      req.query.textbookVersion !== undefined &&
+      req.query.textbookVersion !== null &&
+      String(req.query.textbookVersion).trim() !== '';
+    const textbookVersion = normalizeTextbookVersion(
+      hasQueryTv ? req.query.textbookVersion : student.textbook_version
+    );
     const grade =
       req.query.grade !== undefined && req.query.grade !== ''
         ? parseInt(req.query.grade, 10)
@@ -67,7 +73,7 @@ module.exports = function dictationRoutes(db) {
           `SELECT rt.id, rt.grade, rt.volume, rt.unit, rt.title, COUNT(slw.id) AS word_count
            FROM student_lesson_words slw
            JOIN recitation_texts rt ON rt.id = slw.recitation_text_id
-           WHERE slw.student_id = ? AND rt.textbook_version = ?
+           WHERE slw.student_id = ? AND trim(rt.textbook_version) = ?
            GROUP BY rt.id
            ORDER BY rt.grade, rt.unit, rt.sort_order`
         )
@@ -78,7 +84,7 @@ module.exports = function dictationRoutes(db) {
           `SELECT rt.id, rt.grade, rt.volume, rt.unit, rt.title, COUNT(slw.id) AS word_count
            FROM student_lesson_words slw
            JOIN recitation_texts rt ON rt.id = slw.recitation_text_id
-           WHERE slw.student_id = ? AND rt.textbook_version = ? AND rt.grade = ? AND rt.volume = ?
+           WHERE slw.student_id = ? AND trim(rt.textbook_version) = ? AND rt.grade = ? AND trim(rt.volume) = ?
            GROUP BY rt.id
            ORDER BY rt.unit, rt.sort_order`
         )

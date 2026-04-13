@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { recordUsage } = require('../middleware/usageTracker');
-const { normalizeVolume } = require('../utils/volume');
+const { normalizeVolume, normalizeTextbookVersion } = require('../utils/volume');
 
 module.exports = function recitationRoutes(db) {
   const router = Router();
@@ -30,7 +30,13 @@ module.exports = function recitationRoutes(db) {
       req.query.grade !== undefined && req.query.grade !== ''
         ? parseInt(req.query.grade, 10)
         : student.grade;
-    const textbookVersion = req.query.textbookVersion || student.textbook_version;
+    const hasQueryTv =
+      req.query.textbookVersion !== undefined &&
+      req.query.textbookVersion !== null &&
+      String(req.query.textbookVersion).trim() !== '';
+    const textbookVersion = normalizeTextbookVersion(
+      hasQueryTv ? req.query.textbookVersion : student.textbook_version
+    );
     const volume = normalizeVolume(
       req.query.volume !== undefined && req.query.volume !== '' ? req.query.volume : student.textbook_volume
     );
@@ -39,7 +45,7 @@ module.exports = function recitationRoutes(db) {
     }
     const texts = db.prepare(
       `SELECT id, grade, volume, unit, title FROM recitation_texts
-       WHERE textbook_version = ? AND grade = ? AND volume = ?
+       WHERE trim(textbook_version) = ? AND grade = ? AND trim(volume) = ?
        ORDER BY unit, sort_order`
     ).all(textbookVersion, grade, volume);
     res.json(texts);
@@ -51,13 +57,19 @@ module.exports = function recitationRoutes(db) {
       return res.status(400).json({ error: '请指定学生（家长请在链接中带上孩子账号）' });
     }
     const student = db.prepare('SELECT textbook_version, textbook_volume FROM students WHERE id = ?').get(sid);
-    const textbookVersion = req.query.textbookVersion || student.textbook_version;
+    const hasQueryTv =
+      req.query.textbookVersion !== undefined &&
+      req.query.textbookVersion !== null &&
+      String(req.query.textbookVersion).trim() !== '';
+    const textbookVersion = normalizeTextbookVersion(
+      hasQueryTv ? req.query.textbookVersion : student.textbook_version
+    );
     const volume = normalizeVolume(
       req.query.volume !== undefined && req.query.volume !== '' ? req.query.volume : student.textbook_volume
     );
     const texts = db.prepare(
       `SELECT id, grade, volume, unit, title FROM recitation_texts
-       WHERE textbook_version = ? AND volume = ?
+       WHERE trim(textbook_version) = ? AND trim(volume) = ?
        ORDER BY grade, unit, sort_order`
     ).all(textbookVersion, volume);
     res.json(texts);
