@@ -20,6 +20,9 @@ Usage:
 
 2GB 内存服务器：全量载入会 OOM，请加 --max-train-samples / --max-test-samples，
 并减小 --batch-size（如 16），后台示例见项目 README 或 DESIGN.md。
+
+ONNX 导出：脚本已使用 dynamo=False（TorchScript 路径），一般无需 onnxscript。
+若仍报错，可执行: pip install onnxscript onnx
 """
 
 import argparse, json, math, os, struct, sys, time
@@ -209,13 +212,17 @@ def export_onnx(model, num_classes, output_path, quantize=False):
     model.cpu()
     dummy = torch.randn(1, 1, IMG_SIZE, IMG_SIZE)
     onnx_path = output_path
-    torch.onnx.export(
-        model, dummy, onnx_path,
+    # PyTorch 2.4+ 默认可能走 dynamo 导出链，会依赖 onnxscript；旧版 TorchScript 导出更轻、无此依赖
+    export_kw = dict(
         input_names=["input"],
         output_names=["output"],
         dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}},
         opset_version=13,
     )
+    try:
+        torch.onnx.export(model, dummy, onnx_path, dynamo=False, **export_kw)
+    except TypeError:
+        torch.onnx.export(model, dummy, onnx_path, **export_kw)
     size_mb = os.path.getsize(onnx_path) / 1024 / 1024
     print(f"Exported ONNX: {onnx_path} ({size_mb:.2f} MB)")
 
@@ -338,6 +345,19 @@ def main():
     model.load_state_dict(best_state)
 
     os.makedirs(args.output_dir, exist_ok=True)
+    # 先保存权重，避免 ONNX 导出失败时白训一轮
+    ckpt_path = os.path.join(args.output_dir, "hwdb-best.pt")
+    torch.save(
+        {
+            "state_dict": best_state,
+            "num_classes": num_classes,
+            "classes": all_chars,
+            "best_test_acc": best_acc,
+        },
+        ckpt_path,
+    )
+    print(f"Saved checkpoint: {ckpt_path}")
+
     onnx_path = os.path.join(args.output_dir, "hwdb-classifier.onnx")
     export_onnx(model, num_classes, onnx_path, quantize=args.quantize)
 
