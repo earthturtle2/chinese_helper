@@ -4,6 +4,7 @@ const path = require('path');
 const config = require('./config');
 const { initDatabase } = require('./db/init');
 const { normalizeVolume, isValidVolume } = require('./utils/volume');
+const { localDateString } = require('./utils/dates');
 const { authenticate, requireRole } = require('./middleware/auth');
 const { usageTracker } = require('./middleware/usageTracker');
 
@@ -38,7 +39,7 @@ app.get('/api/me', authenticate, (req, res) => {
     const student = db.prepare(
       'SELECT display_name, grade, textbook_version, textbook_volume FROM students WHERE id = ?'
     ).get(id);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateString();
     const usage = db.prepare('SELECT minutes FROM usage_log WHERE student_id = ? AND date = ?').get(id, today);
     const globalLimit = db.prepare("SELECT value FROM settings WHERE key = 'default_daily_limit'").get();
     const studentRow = db.prepare('SELECT daily_limit FROM students WHERE id = ?').get(id);

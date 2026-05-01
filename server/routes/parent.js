@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const { authenticate, requireRole } = require('../middleware/auth');
+const { localDateString, localDateDaysAgo } = require('../utils/dates');
 
 module.exports = function parentRoutes(db) {
   const router = Router();
@@ -17,7 +18,7 @@ module.exports = function parentRoutes(db) {
       .get(req.params.studentId, req.user.id);
     if (!student) return res.status(403).json({ error: '无权查看该学生数据' });
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateString();
     const usage = db.prepare('SELECT minutes FROM usage_log WHERE student_id = ? AND date = ?')
       .get(student.id, today);
 
@@ -64,6 +65,7 @@ module.exports = function parentRoutes(db) {
     if (!student) return res.status(403).json({ error: '无权查看该学生数据' });
 
     const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+    const weekAgoDate = localDateDaysAgo(7);
 
     const dictation = db.prepare(
       'SELECT total_words, correct, created_at FROM dictation_records WHERE student_id = ? AND created_at >= ? ORDER BY created_at'
@@ -79,7 +81,7 @@ module.exports = function parentRoutes(db) {
 
     const usage = db.prepare(
       'SELECT date, minutes FROM usage_log WHERE student_id = ? AND date >= ? ORDER BY date'
-    ).all(req.params.studentId, weekAgo.slice(0, 10));
+    ).all(req.params.studentId, weekAgoDate);
 
     const totalDictation = dictation.reduce((s, r) => s + r.total_words, 0);
     const totalCorrect = dictation.reduce((s, r) => s + r.correct, 0);

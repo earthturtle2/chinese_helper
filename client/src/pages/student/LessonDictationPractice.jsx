@@ -16,7 +16,7 @@ export default function LessonDictationPractice() {
   const [showAnswer, setShowAnswer] = useState(false);
   const [summary, setSummary] = useState(null);
   const [busy, setBusy] = useState(false);
-  const startTime = useRef(Date.now());
+  const startTime = useRef(0);
   const hwRef = useRef(null);
   const resultsRef = useRef([]);
   const ttsEngine = useTtsEngine();
@@ -44,6 +44,7 @@ export default function LessonDictationPractice() {
           return;
         }
         setWords(list);
+        startTime.current = Date.now();
         setPhase('practice');
       })
       .catch(() => navigate('/student/lesson-study'));
@@ -64,9 +65,13 @@ export default function LessonDictationPractice() {
   useEffect(() => {
     if (skipAutoSpeak) return;
     if (phase === 'practice' && word) {
-      speakPinyin();
+      void speakChineseWord(word.word, {
+        rate: 0.8,
+        cancelBefore: true,
+        onError: () => setTtsError('朗读失败：请尝试使用 Chrome 浏览器，或检查系统中文语音设置。'),
+      });
     }
-  }, [current, phase, word, speakPinyin, skipAutoSpeak]);
+  }, [current, phase, word, skipAutoSpeak]);
 
   const finishWithResults = async (allResults) => {
     setPhase('submitting');
@@ -78,7 +83,7 @@ export default function LessonDictationPractice() {
         durationSec,
       });
       setSummary(data);
-      setResults(allResults);
+      setResults(data.results || allResults);
       setPhase('done');
     } catch {
       setPhase('done');

@@ -2,6 +2,7 @@ const { Router } = require('express');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { recordUsage } = require('../middleware/usageTracker');
 const { normalizeVolume, normalizeTextbookVersion } = require('../utils/volume');
+const { extractHanzi } = require('../utils/chinesePinyin');
 
 module.exports = function dictationRoutes(db) {
   const router = Router();
@@ -37,6 +38,49 @@ module.exports = function dictationRoutes(db) {
       }
     });
     tx();
+  }
+
+  function normalizeAnswer(value) {
+    return extractHanzi(String(value || '').trim());
+  }
+
+  function normalizeDurationSec(value) {
+    const n = parseInt(value, 10);
+    if (!Number.isFinite(n) || n < 0) return 0;
+    return Math.min(n, 7200);
+  }
+
+  function buildCheckedResults(expectedWords, submittedResults) {
+    if (!Array.isArray(submittedResults) || submittedResults.length === 0) {
+      const err = new Error('缺少答题数据');
+      err.status = 400;
+      throw err;
+    }
+    if (submittedResults.length !== expectedWords.length) {
+      const err = new Error('答题数量与词表不一致，请重新进入练习');
+      err.status = 400;
+      throw err;
+    }
+    return expectedWords.map((expected, i) => {
+      const input = normalizeAnswer(submittedResults[i]?.input);
+      const correct = input === expected.word;
+      return {
+        word: expected.word,
+        pinyin: expected.pinyin || '',
+        input,
+        correct,
+        mistakeType: correct ? null : 'unknown',
+      };
+    });
+  }
+
+  function summarizeResults(checkedResults) {
+    const correct = checkedResults.filter((r) => r.correct).length;
+    return {
+      total: checkedResults.length,
+      correct,
+      accuracy: checkedResults.length > 0 ? Math.round((correct / checkedResults.length) * 100) : 0,
+    };
   }
 
   /** 当前学生已添加过生词的课文，供「生词默写」入口选择 */
@@ -127,47 +171,71 @@ module.exports = function dictationRoutes(db) {
 
   router.post('/submit', (req, res) => {
     const { wordListId, recitationTextId, results, durationSec } = req.body;
-    if (!results?.length) return res.status(400).json({ error: '缺少答题数据' });
-
-    const correct = results.filter((r) => r.correct).length;
-    const dur = durationSec || 0;
+    const dur = normalizeDurationSec(durationSec);
 
     if (recitationTextId) {
       const tid = parseInt(recitationTextId, 10);
       if (Number.isNaN(tid)) return res.status(400).json({ error: '课文无效' });
       const text = db.prepare('SELECT id FROM recitation_texts WHERE id = ?').get(tid);
       if (!text) return res.status(404).json({ error: '课文不存在' });
+      const expected = db.prepare(
+        `SELECT word, pinyin FROM student_lesson_words
+         WHERE student_id = ? AND recitation_text_id = ? ORDER BY sort_order, id`
+      ).all(req.user.id, tid);
+      if (expected.length === 0) return res.status(400).json({ error: '本课尚未配置默写生词' });
+
+      let checkedResults;
+      try {
+        checkedResults = buildCheckedResults(expected, results);
+      } catch (e) {
+        return res.status(e.status || 400).json({ error: e.message || '答题数据无效' });
+      }
+      const summary = summarizeResults(checkedResults);
 
       db.prepare(
         `INSERT INTO lesson_dictation_records (student_id, recitation_text_id, total_words, correct, duration_sec)
          VALUES (?, ?, ?, ?, ?)`
-      ).run(req.user.id, tid, results.length, correct, dur);
+      ).run(req.user.id, tid, summary.total, summary.correct, dur);
 
-      applyMistakesFromResults(req.user.id, results);
+      applyMistakesFromResults(req.user.id, checkedResults);
       recordUsage(db, req.user.id, Math.ceil(dur / 60));
 
       return res.json({
         message: '默写完成',
-        total: results.length,
-        correct,
-        accuracy: Math.round((correct / results.length) * 100),
+        ...summary,
+        results: checkedResults,
       });
     }
 
     if (!wordListId) return res.status(400).json({ error: '缺少词表或课文' });
+    const wid = parseInt(wordListId, 10);
+    if (Number.isNaN(wid)) return res.status(400).json({ error: '词表无效' });
+    const list = db.prepare('SELECT id FROM word_lists WHERE id = ?').get(wid);
+    if (!list) return res.status(404).json({ error: '词表不存在' });
+    const expected = db.prepare(
+      'SELECT word, pinyin FROM words WHERE word_list_id = ? ORDER BY sort_order, id'
+    ).all(wid);
+    if (expected.length === 0) return res.status(400).json({ error: '词表为空' });
+
+    let checkedResults;
+    try {
+      checkedResults = buildCheckedResults(expected, results);
+    } catch (e) {
+      return res.status(e.status || 400).json({ error: e.message || '答题数据无效' });
+    }
+    const summary = summarizeResults(checkedResults);
 
     db.prepare(
       'INSERT INTO dictation_records (student_id, word_list_id, total_words, correct, duration_sec) VALUES (?, ?, ?, ?, ?)'
-    ).run(req.user.id, wordListId, results.length, correct, dur);
+    ).run(req.user.id, wid, summary.total, summary.correct, dur);
 
-    applyMistakesFromResults(req.user.id, results);
+    applyMistakesFromResults(req.user.id, checkedResults);
     recordUsage(db, req.user.id, Math.ceil(dur / 60));
 
     res.json({
       message: '默写完成',
-      total: results.length,
-      correct,
-      accuracy: Math.round((correct / results.length) * 100),
+      ...summary,
+      results: checkedResults,
     });
   });
 

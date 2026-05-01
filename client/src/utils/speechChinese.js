@@ -21,7 +21,24 @@
  */
 
 import { api } from '../api';
-import { abortKokoroSynthesis, synthesizeKokoroZh, splitTextForKokoro } from './kokoroZhTts';
+
+let kokoroModulePromise = null;
+
+function loadKokoroTts() {
+  if (!kokoroModulePromise) {
+    kokoroModulePromise = import('./kokoroZhTts');
+  }
+  return kokoroModulePromise;
+}
+
+function abortKokoroIfLoaded() {
+  if (!kokoroModulePromise) return;
+  void kokoroModulePromise
+    .then((mod) => mod.abortKokoroSynthesis())
+    .catch(() => {
+      /* ignore */
+    });
+}
 
 /** 防止连续猛点：短句最小间隔 + 互斥；长文最小间隔 + 互斥（含浏览器分段读完） */
 const SPEAK_WORD_MIN_GAP_MS = 420;
@@ -493,6 +510,7 @@ export async function speakChineseWord(text, { rate = 0.82, cancelBefore = true,
 
     if (preferredTtsEngine === 'kokoro') {
       try {
+        const { synthesizeKokoroZh } = await loadKokoroTts();
         const raw = await synthesizeKokoroZh(text, kokoroClientOptions);
         await playWavBlob(raw.toBlob());
         return;
@@ -545,6 +563,7 @@ export async function enqueueChineseLongText(text, { rate = 0.92, onComplete, on
 
     if (preferredTtsEngine === 'kokoro') {
       try {
+        const { synthesizeKokoroZh, splitTextForKokoro } = await loadKokoroTts();
         const parts = splitTextForKokoro(text);
         for (let i = 0; i < parts.length; i++) {
           await waitUntilFullTextResumed();
@@ -598,7 +617,7 @@ export async function enqueueChineseLongText(text, { rate = 0.92, onComplete, on
 }
 
 export function stopChineseSpeech() {
-  abortKokoroSynthesis();
+  abortKokoroIfLoaded();
   clearFullTextPauseState();
   cancelBrowserSpeechTimer();
   stopBrowserSpeech();

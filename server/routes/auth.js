@@ -1,13 +1,30 @@
 const { Router } = require('express');
 const bcrypt = require('bcryptjs');
+const rateLimit = require('express-rate-limit');
 const { generateToken } = require('../middleware/auth');
 const { normalizeInviteCode, inviteLookupKey, verifyInviteCode } = require('../utils/inviteCode');
 const { isParentFeatureEnabled } = require('../utils/settings');
 
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: '登录尝试过于频繁，请稍后再试' },
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: '注册尝试过于频繁，请稍后再试' },
+});
+
 module.exports = function authRoutes(db) {
   const router = Router();
 
-  router.post('/admin/login', (req, res) => {
+  router.post('/admin/login', loginLimiter, (req, res) => {
     const username = String(req.body.username || '').trim();
     const password = req.body.password;
     if (!username || password == null || password === '') {
@@ -23,7 +40,7 @@ module.exports = function authRoutes(db) {
     return res.status(401).json({ error: '用户名或密码错误' });
   });
 
-  router.post('/login', (req, res) => {
+  router.post('/login', loginLimiter, (req, res) => {
     const username = String(req.body.username || '').trim();
     const password = req.body.password;
     if (!username || password == null || password === '') {
@@ -60,7 +77,7 @@ module.exports = function authRoutes(db) {
     return res.status(401).json({ error: '用户名或密码错误' });
   });
 
-  router.post('/register', (req, res) => {
+  router.post('/register', registerLimiter, (req, res) => {
     const username = String(req.body.username || '').trim();
     const displayName = req.body.displayName != null ? String(req.body.displayName).trim() : '';
     const { password, inviteCode } = req.body;
@@ -133,7 +150,7 @@ module.exports = function authRoutes(db) {
     });
   });
 
-  router.post('/change-password', (req, res) => {
+  router.post('/change-password', loginLimiter, (req, res) => {
     const { username, oldPassword, newPassword } = req.body;
     if (!username || !oldPassword || !newPassword) {
       return res.status(400).json({ error: '请填写所有字段' });

@@ -172,17 +172,13 @@ function isSegmentOfFullText(full, segment) {
 }
 
 function analyzeRecitation(original, recognized) {
-  const origChars = original.replace(/[，。！？、；：""''（）\s]/g, '');
-  const recChars = (recognized || '').replace(/[，。！？、；：""''（）\s]/g, '');
+  const origChars = normalizeRecitationChars(original);
+  const recChars = normalizeRecitationChars(recognized);
 
   const origSentences = original.split(/[。！？]/).filter(Boolean);
   const recSentences = (recognized || '').split(/[。！？]/).filter(Boolean);
 
-  let matchedChars = 0;
-  const minLen = Math.min(origChars.length, recChars.length);
-  for (let i = 0; i < minLen; i++) {
-    if (origChars[i] === recChars[i]) matchedChars++;
-  }
+  const matchedChars = lcsLength(origChars, recChars);
 
   const accuracy = origChars.length > 0 ? Math.round((matchedChars / origChars.length) * 100) : 0;
   const completeness = origChars.length > 0
@@ -194,13 +190,10 @@ function analyzeRecitation(original, recognized) {
 
   const sentenceDetails = origSentences.map((sentence, i) => {
     const recSentence = recSentences[i] || '';
-    const s = sentence.replace(/[，、；：\s]/g, '');
-    const r = recSentence.replace(/[，、；：\s]/g, '');
+    const s = normalizeRecitationChars(sentence);
+    const r = normalizeRecitationChars(recSentence);
 
-    let correct = 0;
-    for (let j = 0; j < Math.min(s.length, r.length); j++) {
-      if (s[j] === r[j]) correct++;
-    }
+    const correct = lcsLength(s, r);
     const sentenceAccuracy = s.length > 0 ? Math.round((correct / s.length) * 100) : 0;
 
     let status = 'correct';
@@ -212,4 +205,24 @@ function analyzeRecitation(original, recognized) {
   });
 
   return { accuracy, fluency, completeness, totalScore, details: { sentences: sentenceDetails } };
+}
+
+function normalizeRecitationChars(text) {
+  return Array.from(String(text || '').replace(/[，。！？、；：""''（）《》【】\[\]\s]/g, ''));
+}
+
+function lcsLength(a, b) {
+  const xs = Array.isArray(a) ? a : Array.from(String(a || ''));
+  const ys = Array.isArray(b) ? b : Array.from(String(b || ''));
+  if (xs.length === 0 || ys.length === 0) return 0;
+  let prev = new Array(ys.length + 1).fill(0);
+  let curr = new Array(ys.length + 1).fill(0);
+  for (let i = 1; i <= xs.length; i += 1) {
+    for (let j = 1; j <= ys.length; j += 1) {
+      curr[j] = xs[i - 1] === ys[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], curr[j - 1]);
+    }
+    [prev, curr] = [curr, prev];
+    curr.fill(0);
+  }
+  return prev[ys.length];
 }

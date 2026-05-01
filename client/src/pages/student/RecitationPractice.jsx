@@ -12,7 +12,6 @@ export default function RecitationPractice() {
   const [phase, setPhase] = useState('select');
   const [selectedSegment, setSelectedSegment] = useState('');
   const [recognized, setRecognized] = useState('');
-  const [recording, setRecording] = useState(false);
   const [result, setResult] = useState(null);
   const [usedHints, setUsedHints] = useState(0);
   const startTime = useRef(null);
@@ -57,7 +56,6 @@ export default function RecitationPractice() {
       return;
     }
     setRecognized('');
-    setRecording(true);
     startTime.current = Date.now();
 
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -80,7 +78,7 @@ export default function RecitationPractice() {
         setRecognized(finalText + interim);
       };
 
-      recognition.onerror = () => setRecording(false);
+      recognition.onerror = () => setPhase('reviewing');
       recognition.onend = () => {
         setRecognized(finalText);
       };
@@ -92,7 +90,6 @@ export default function RecitationPractice() {
   };
 
   const stopRecording = () => {
-    setRecording(false);
     recognitionRef.current?.stop();
     setPhase('reviewing');
   };

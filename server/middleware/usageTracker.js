@@ -1,11 +1,12 @@
 const config = require('../config');
+const { localDateString } = require('../utils/dates');
 
 function usageTracker(db) {
   return (req, res, next) => {
     if (!req.user || req.user.role !== 'student') return next();
 
     const studentId = req.user.id;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateString();
 
     const row = db.prepare('SELECT minutes FROM usage_log WHERE student_id = ? AND date = ?').get(studentId, today);
     const used = row ? row.minutes : 0;
@@ -21,7 +22,7 @@ function usageTracker(db) {
 }
 
 function recordUsage(db, studentId, minutes) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateString();
   db.prepare(`
     INSERT INTO usage_log (student_id, date, minutes) VALUES (?, ?, ?)
     ON CONFLICT(student_id, date) DO UPDATE SET minutes = minutes + ?

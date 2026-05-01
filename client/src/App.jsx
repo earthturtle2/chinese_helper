@@ -1,28 +1,30 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './context/AuthContext';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import AdminDashboard from './pages/admin/Dashboard';
-import AdminStudents from './pages/admin/Students';
-import AdminParents from './pages/admin/Parents';
-import AdminContent from './pages/admin/Content';
-import AdminInvitations from './pages/admin/Invitations';
-import StudentHome from './pages/student/Home';
-import Dictation from './pages/student/Dictation';
-import DictationPractice from './pages/student/DictationPractice';
-import MistakeBook from './pages/student/MistakeBook';
-import Recitation from './pages/student/Recitation';
-import RecitationPractice from './pages/student/RecitationPractice';
-import LessonStudy from './pages/student/LessonStudy';
-import LessonStudyDetail from './pages/student/LessonStudyDetail';
-import LessonDictationPractice from './pages/student/LessonDictationPractice';
-import Writing from './pages/student/Writing';
-import WritingSession from './pages/student/WritingSession';
-import ParentDashboard from './pages/parent/Dashboard';
-import ParentWeekly from './pages/parent/Weekly';
-import ParentLessonStudy from './pages/parent/ParentLessonStudy';
-import ParentRecitation from './pages/parent/ParentRecitation';
+import { useAuth } from './context/useAuth';
 import Layout from './components/Layout';
+
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
+const AdminStudents = lazy(() => import('./pages/admin/Students'));
+const AdminParents = lazy(() => import('./pages/admin/Parents'));
+const AdminContent = lazy(() => import('./pages/admin/Content'));
+const AdminInvitations = lazy(() => import('./pages/admin/Invitations'));
+const StudentHome = lazy(() => import('./pages/student/Home'));
+const Dictation = lazy(() => import('./pages/student/Dictation'));
+const DictationPractice = lazy(() => import('./pages/student/DictationPractice'));
+const MistakeBook = lazy(() => import('./pages/student/MistakeBook'));
+const Recitation = lazy(() => import('./pages/student/Recitation'));
+const RecitationPractice = lazy(() => import('./pages/student/RecitationPractice'));
+const LessonStudy = lazy(() => import('./pages/student/LessonStudy'));
+const LessonStudyDetail = lazy(() => import('./pages/student/LessonStudyDetail'));
+const LessonDictationPractice = lazy(() => import('./pages/student/LessonDictationPractice'));
+const Writing = lazy(() => import('./pages/student/Writing'));
+const WritingSession = lazy(() => import('./pages/student/WritingSession'));
+const ParentDashboard = lazy(() => import('./pages/parent/Dashboard'));
+const ParentWeekly = lazy(() => import('./pages/parent/Weekly'));
+const ParentLessonStudy = lazy(() => import('./pages/parent/ParentLessonStudy'));
+const ParentRecitation = lazy(() => import('./pages/parent/ParentRecitation'));
 
 function getHomePath(role) {
   switch (role) {
@@ -77,10 +79,11 @@ export default function App() {
   if (loading) return <div className="loading">加载中...</div>;
 
   return (
-    <Routes>
-      <Route path="/login" element={user ? <Navigate to={getHomePath(user.role)} replace /> : <Login />} />
-      <Route path="/admin/login" element={<Navigate to={user?.role === 'admin' ? '/admin' : '/login?admin=1'} replace />} />
-      <Route path="/register" element={user ? <Navigate to={getHomePath(user.role)} replace /> : <Register />} />
+    <Suspense fallback={<div className="loading">加载中...</div>}>
+      <Routes>
+        <Route path="/login" element={user ? <Navigate to={getHomePath(user.role)} replace /> : <Login />} />
+        <Route path="/admin/login" element={<Navigate to={user?.role === 'admin' ? '/admin' : '/login?admin=1'} replace />} />
+        <Route path="/register" element={user ? <Navigate to={getHomePath(user.role)} replace /> : <Register />} />
 
       <Route path="/admin" element={<AdminLayout />}>
         <Route index element={<AdminDashboard />} />
@@ -151,7 +154,8 @@ export default function App() {
         <Route index element={<RecitationPractice />} />
       </Route>
 
-      <Route path="*" element={<Navigate to={user ? getHomePath(user.role) : '/login'} replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to={user ? getHomePath(user.role) : '/login'} replace />} />
+      </Routes>
+    </Suspense>
   );
 }

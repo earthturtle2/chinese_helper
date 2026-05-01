@@ -40,6 +40,15 @@ function drawGridOnly(ctx, size) {
   ctx.stroke();
 }
 
+function beginInkStroke(ctx, x, y, lineWidth) {
+  ctx.strokeStyle = INK_COLOR;
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+}
+
 /**
  * 田字格 + 笔迹层；本地 ONNX CRNN 识别，无键盘输入（DESIGN.md 手写识别闭环）。
  */
@@ -49,12 +58,9 @@ const TianZiGeHandwriting = forwardRef(function TianZiGeHandwriting({ charCount,
   const inkRefs = useRef([]);
   const inkCtxRefs = useRef([]);
   const drawingRef = useRef(false);
-  const cellSizeRef = useRef(120);
   const [cellSize, setCellSize] = useState(computeCellSize);
   const [status, setStatus] = useState('');
   const [modelError, setModelError] = useState(null);
-
-  cellSizeRef.current = cellSize;
 
   const redrawGrids = useCallback(() => {
     const sz = cellSize;
@@ -95,7 +101,7 @@ const TianZiGeHandwriting = forwardRef(function TianZiGeHandwriting({ charCount,
 
   const getLocalCoords = (canvas, e) => {
     const r = canvas.getBoundingClientRect();
-    const logical = cellSizeRef.current;
+    const logical = cellSize;
     const x = ((e.clientX - r.left) / r.width) * logical;
     const y = ((e.clientY - r.top) / r.height) * logical;
     return { x, y };
@@ -108,17 +114,12 @@ const TianZiGeHandwriting = forwardRef(function TianZiGeHandwriting({ charCount,
     const canvas = e.currentTarget;
     let ctx = inkCtxRefs.current[idx];
     if (!ctx) {
-      ctx = setupHiDpiCanvas(canvas, cellSizeRef.current);
+      ctx = setupHiDpiCanvas(canvas, cellSize);
       inkCtxRefs.current[idx] = ctx;
     }
     const { x, y } = getLocalCoords(canvas, e);
     drawingRef.current = true;
-    ctx.strokeStyle = INK_COLOR;
-    ctx.lineWidth = Math.max(4, cellSizeRef.current * 0.05);
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(x, y);
+    beginInkStroke(ctx, x, y, Math.max(4, cellSize * 0.05));
   };
 
   const onPointerMove = (e, idx) => {

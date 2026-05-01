@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../../api';
 import {
@@ -18,7 +18,10 @@ export default function LessonStudyDetail() {
     ? `/parent/children/${parentStudentId}/lesson-study`
     : '/student/lesson-study';
 
-  const apiQuery = isParent ? { studentId: Number(parentStudentId) } : undefined;
+  const apiQuery = useMemo(
+    () => (isParent ? { studentId: Number(parentStudentId) } : undefined),
+    [isParent, parentStudentId]
+  );
 
   const [data, setData] = useState(null);
   const [reading, setReading] = useState(false);
@@ -72,7 +75,7 @@ export default function LessonStudyDetail() {
         setTtsError('朗读失败：当前浏览器可能不支持中文语音，请尝试使用 Chrome 浏览器，或在系统设置中安装中文语音引擎。');
       },
     });
-  }, [data?.content]);
+  }, [data]);
 
   useEffect(() => {
     return () => {

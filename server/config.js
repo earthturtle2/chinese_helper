@@ -54,6 +54,7 @@ module.exports = {
   voskModelPath: process.env.VOSK_MODEL_PATH || './models/vosk-model-small-cn-0.22',
 
   defaultDailyLimit: parseInt(process.env.DEFAULT_DAILY_LIMIT, 10) || 40,
+  appTimeZone: process.env.APP_TIME_ZONE || 'Asia/Shanghai',
 
   dbPath: process.env.DB_PATH || './data/chinese_helper.db',
 

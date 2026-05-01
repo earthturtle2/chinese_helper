@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const bcrypt = require('bcryptjs');
 const { authenticate, requireRole } = require('../middleware/auth');
-const { normalizeVolume, isValidVolume } = require('../utils/volume');
+const { normalizeVolume, normalizeTextbookVersion, isValidVolume } = require('../utils/volume');
 const {
   generatePlainInviteCode,
   normalizeInviteCode,
@@ -17,6 +17,51 @@ function maskSettings(settings) {
     }
   }
   return out;
+}
+
+function cleanUsername(value) {
+  const username = String(value || '').trim();
+  if (!/^[A-Za-z0-9_.-]{3,32}$/.test(username)) {
+    const err = new Error('用户名须为 3-32 位字母、数字、下划线、点或连字符');
+    err.status = 400;
+    throw err;
+  }
+  return username;
+}
+
+function cleanPassword(value) {
+  const password = typeof value === 'string' ? value.trim() : '';
+  if (password.length < 8) {
+    const err = new Error('密码至少 8 位');
+    err.status = 400;
+    throw err;
+  }
+  return password;
+}
+
+function cleanGrade(value) {
+  const grade = parseInt(value, 10);
+  if (Number.isNaN(grade) || grade < 3 || grade > 6) {
+    const err = new Error('年级必须在 3–6 之间');
+    err.status = 400;
+    throw err;
+  }
+  return grade;
+}
+
+function cleanDailyLimit(value) {
+  if (value == null || value === '') return null;
+  const limit = parseInt(value, 10);
+  if (Number.isNaN(limit) || limit < 5 || limit > 240) {
+    const err = new Error('每日时长须为 5–240 分钟，或留空');
+    err.status = 400;
+    throw err;
+  }
+  return limit;
+}
+
+function handleValidationError(res, err) {
+  return res.status(err.status || 400).json({ error: err.message || '参数无效' });
 }
 
 module.exports = function adminRoutes(db) {
@@ -55,48 +100,91 @@ module.exports = function adminRoutes(db) {
 
   router.post('/students', (req, res) => {
     const { username, displayName, password, grade, textbookVersion, textbookVolume } = req.body;
-    if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
+    let clean;
+    try {
+      clean = {
+        username: cleanUsername(username),
+        displayName: String(displayName || username || '').trim(),
+        password: cleanPassword(password),
+        grade: grade == null || grade === '' ? 3 : cleanGrade(grade),
+        textbookVersion: normalizeTextbookVersion(textbookVersion || '统编版') || '统编版',
+        textbookVolume: normalizeVolume(textbookVolume),
+      };
+    } catch (e) {
+      return handleValidationError(res, e);
+    }
 
-    const exists = db.prepare('SELECT id FROM students WHERE username = ?').get(username);
+    const exists = db.prepare('SELECT id FROM students WHERE username = ?').get(clean.username);
     if (exists) return res.status(409).json({ error: '该用户名已存在' });
 
-    const adminExists = db.prepare('SELECT id FROM admins WHERE username = ?').get(username);
-    const parentExists = db.prepare('SELECT id FROM parents WHERE username = ?').get(username);
+    const adminExists = db.prepare('SELECT id FROM admins WHERE username = ?').get(clean.username);
+    const parentExists = db.prepare('SELECT id FROM parents WHERE username = ?').get(clean.username);
     if (adminExists || parentExists) return res.status(409).json({ error: '该用户名已被其他角色使用' });
 
-    const hash = bcrypt.hashSync(password, 10);
-    const vol = normalizeVolume(textbookVolume);
+    const hash = bcrypt.hashSync(clean.password, 10);
     const info = db.prepare(
       'INSERT INTO students (username, display_name, password_hash, grade, textbook_version, textbook_volume) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(username, displayName || username, hash, grade || 3, textbookVersion || '统编版', vol);
+    ).run(
+      clean.username,
+      clean.displayName || clean.username,
+      hash,
+      clean.grade,
+      clean.textbookVersion,
+      clean.textbookVolume
+    );
     res.json({ id: info.lastInsertRowid, message: '学生账户已创建' });
   });
 
   router.put('/students/:id', (req, res) => {
     const { displayName, grade, textbookVersion, textbookVolume, dailyLimit, parentId } = req.body;
-    const student = db.prepare('SELECT id FROM students WHERE id = ?').get(req.params.id);
+    const studentId = parseInt(req.params.id, 10);
+    if (Number.isNaN(studentId)) return res.status(400).json({ error: '无效的学生 ID' });
+    const student = db.prepare('SELECT id FROM students WHERE id = ?').get(studentId);
     if (!student) return res.status(404).json({ error: '学生不存在' });
 
-    if (displayName !== undefined)
-      db.prepare('UPDATE students SET display_name = ? WHERE id = ?').run(displayName, req.params.id);
-    if (grade !== undefined)
-      db.prepare('UPDATE students SET grade = ? WHERE id = ?').run(grade, req.params.id);
-    if (textbookVersion !== undefined)
-      db.prepare('UPDATE students SET textbook_version = ? WHERE id = ?').run(textbookVersion, req.params.id);
-    if (textbookVolume !== undefined) {
-      if (!isValidVolume(textbookVolume)) {
-        return res.status(400).json({ error: '分册须为「上册」或「下册」' });
+    const updates = [];
+    try {
+      if (displayName !== undefined) {
+        updates.push(['display_name', String(displayName || '').trim()]);
       }
-      db.prepare('UPDATE students SET textbook_volume = ? WHERE id = ?').run(
-        normalizeVolume(textbookVolume),
-        req.params.id
-      );
+      if (grade !== undefined) {
+        updates.push(['grade', cleanGrade(grade)]);
+      }
+      if (textbookVersion !== undefined) {
+        const tv = normalizeTextbookVersion(textbookVersion);
+        if (!tv) throw Object.assign(new Error('教材版本不能为空'), { status: 400 });
+        updates.push(['textbook_version', tv]);
+      }
+      if (textbookVolume !== undefined) {
+        if (!isValidVolume(textbookVolume)) {
+          throw Object.assign(new Error('分册须为「上册」或「下册」'), { status: 400 });
+        }
+        updates.push(['textbook_volume', normalizeVolume(textbookVolume)]);
+      }
+      if (dailyLimit !== undefined) {
+        updates.push(['daily_limit', cleanDailyLimit(dailyLimit)]);
+      }
+      if (parentId !== undefined) {
+        const pid = parentId == null || parentId === '' ? null : parseInt(parentId, 10);
+        if (pid !== null) {
+          if (Number.isNaN(pid)) throw Object.assign(new Error('家长 ID 无效'), { status: 400 });
+          const parent = db.prepare('SELECT id FROM parents WHERE id = ?').get(pid);
+          if (!parent) throw Object.assign(new Error('家长不存在'), { status: 400 });
+        }
+        updates.push(['parent_id', pid]);
+      }
+    } catch (e) {
+      return handleValidationError(res, e);
     }
-    if (dailyLimit !== undefined)
-      db.prepare('UPDATE students SET daily_limit = ? WHERE id = ?').run(dailyLimit, req.params.id);
-    if (parentId !== undefined)
-      db.prepare('UPDATE students SET parent_id = ? WHERE id = ?').run(parentId || null, req.params.id);
 
+    if (updates.length > 0) {
+      const tx = db.transaction(() => {
+        for (const [column, value] of updates) {
+          db.prepare(`UPDATE students SET ${column} = ? WHERE id = ?`).run(value, studentId);
+        }
+      });
+      tx();
+    }
     res.json({ message: '学生信息已更新' });
   });
 
@@ -107,12 +195,17 @@ module.exports = function adminRoutes(db) {
 
   router.put('/students/:id/reset-password', (req, res) => {
     const raw = req.body.password;
-    const password = typeof raw === 'string' ? raw.trim() : raw;
-    if (!password) return res.status(400).json({ error: '密码不能为空' });
+    let password;
+    try {
+      password = cleanPassword(raw);
+    } catch (e) {
+      return handleValidationError(res, e);
+    }
     const studentId = parseInt(req.params.id, 10);
     if (Number.isNaN(studentId)) return res.status(400).json({ error: '无效的学生 ID' });
     const hash = bcrypt.hashSync(password, 10);
-    db.prepare('UPDATE students SET password_hash = ? WHERE id = ?').run(hash, studentId);
+    const r = db.prepare('UPDATE students SET password_hash = ? WHERE id = ?').run(hash, studentId);
+    if (r.changes === 0) return res.status(404).json({ error: '学生不存在' });
     res.json({ message: '密码已重置' });
   });
 
@@ -129,18 +222,27 @@ module.exports = function adminRoutes(db) {
 
   router.post('/parents', (req, res) => {
     const { username, password, phone } = req.body;
-    if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
+    let clean;
+    try {
+      clean = {
+        username: cleanUsername(username),
+        password: cleanPassword(password),
+        phone: String(phone || '').trim(),
+      };
+    } catch (e) {
+      return handleValidationError(res, e);
+    }
 
-    const exists = db.prepare('SELECT id FROM parents WHERE username = ?').get(username);
+    const exists = db.prepare('SELECT id FROM parents WHERE username = ?').get(clean.username);
     if (exists) return res.status(409).json({ error: '该用户名已存在' });
 
-    const adminExists = db.prepare('SELECT id FROM admins WHERE username = ?').get(username);
-    const studentExists = db.prepare('SELECT id FROM students WHERE username = ?').get(username);
+    const adminExists = db.prepare('SELECT id FROM admins WHERE username = ?').get(clean.username);
+    const studentExists = db.prepare('SELECT id FROM students WHERE username = ?').get(clean.username);
     if (adminExists || studentExists) return res.status(409).json({ error: '该用户名已被其他角色使用' });
 
-    const hash = bcrypt.hashSync(password, 10);
+    const hash = bcrypt.hashSync(clean.password, 10);
     const info = db.prepare('INSERT INTO parents (username, password_hash, phone) VALUES (?, ?, ?)')
-      .run(username, hash, phone || '');
+      .run(clean.username, hash, clean.phone);
     res.json({ id: info.lastInsertRowid, message: '家长账户已创建' });
   });
 
@@ -152,8 +254,12 @@ module.exports = function adminRoutes(db) {
 
   router.put('/parents/:id/reset-password', (req, res) => {
     const raw = req.body.password;
-    const password = typeof raw === 'string' ? raw.trim() : raw;
-    if (!password) return res.status(400).json({ error: '密码不能为空' });
+    let password;
+    try {
+      password = cleanPassword(raw);
+    } catch (e) {
+      return handleValidationError(res, e);
+    }
     const parentId = parseInt(req.params.id, 10);
     if (Number.isNaN(parentId)) return res.status(400).json({ error: '无效的家长 ID' });
     const hash = bcrypt.hashSync(password, 10);
@@ -165,9 +271,18 @@ module.exports = function adminRoutes(db) {
   // --- Bind student to parent ---
   router.post('/bind', (req, res) => {
     const { studentId, parentId } = req.body;
-    if (!studentId) return res.status(400).json({ error: '缺少学生ID' });
-    db.prepare('UPDATE students SET parent_id = ? WHERE id = ?').run(parentId || null, studentId);
-    res.json({ message: parentId ? '绑定成功' : '解绑成功' });
+    const sid = parseInt(studentId, 10);
+    if (Number.isNaN(sid)) return res.status(400).json({ error: '缺少学生ID' });
+    const student = db.prepare('SELECT id FROM students WHERE id = ?').get(sid);
+    if (!student) return res.status(404).json({ error: '学生不存在' });
+    const pid = parentId == null || parentId === '' ? null : parseInt(parentId, 10);
+    if (pid !== null) {
+      if (Number.isNaN(pid)) return res.status(400).json({ error: '家长 ID 无效' });
+      const parent = db.prepare('SELECT id FROM parents WHERE id = ?').get(pid);
+      if (!parent) return res.status(404).json({ error: '家长不存在' });
+    }
+    db.prepare('UPDATE students SET parent_id = ? WHERE id = ?').run(pid, sid);
+    res.json({ message: pid ? '绑定成功' : '解绑成功' });
   });
 
   // --- Word list management ---

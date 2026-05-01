@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth';
 
 const TEXTBOOKS = ['统编版', '人教版', '苏教版', '北师大版'];
 const VOLUMES = ['上册', '下册'];
@@ -11,15 +11,9 @@ export default function Dictation() {
   const [lists, setLists] = useState([]);
   const [lessonTexts, setLessonTexts] = useState([]);
   const [showAll, setShowAll] = useState(false);
-  const [grade, setGrade] = useState(3);
-  const [textbookVersion, setTextbookVersion] = useState('统编版');
-  const [textbookVolume, setTextbookVolume] = useState('上册');
-
-  useEffect(() => {
-    if (user?.grade) setGrade(user.grade);
-    if (user?.textbookVersion) setTextbookVersion(user.textbookVersion);
-    if (user?.textbookVolume) setTextbookVolume(user.textbookVolume);
-  }, [user?.grade, user?.textbookVersion, user?.textbookVolume]);
+  const [grade, setGrade] = useState(user?.grade || 3);
+  const [textbookVersion, setTextbookVersion] = useState(user?.textbookVersion || '统编版');
+  const [textbookVolume, setTextbookVolume] = useState(user?.textbookVolume || '上册');
 
   const persistPrefs = useCallback(async (nextGrade, nextTextbook, nextVolume) => {
     try {

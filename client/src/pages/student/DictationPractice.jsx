@@ -16,8 +16,9 @@ export default function DictationPractice() {
   const [showAnswer, setShowAnswer] = useState(false);
   const [summary, setSummary] = useState(null);
   const [busy, setBusy] = useState(false);
-  const startTime = useRef(Date.now());
+  const startTime = useRef(0);
   const hwRef = useRef(null);
+  const resultsRef = useRef([]);
   const ttsEngine = useTtsEngine();
   const [ttsError, setTtsError] = useState('');
 
@@ -29,9 +30,14 @@ export default function DictationPractice() {
   useEffect(() => {
     api.getWords(listId).then(w => {
       setWords(w);
+      startTime.current = Date.now();
       setPhase('practice');
     }).catch(() => navigate('/student/dictation'));
   }, [listId, navigate]);
+
+  useEffect(() => {
+    resultsRef.current = results;
+  }, [results]);
 
   const word = words[current];
 
@@ -48,9 +54,13 @@ export default function DictationPractice() {
   useEffect(() => {
     if (skipAutoSpeak) return;
     if (phase === 'practice' && word) {
-      speakPinyin();
+      void speakChineseWord(word.word, {
+        rate: 0.8,
+        cancelBefore: true,
+        onError: () => setTtsError('朗读失败：请尝试使用 Chrome 浏览器，或检查系统中文语音设置。'),
+      });
     }
-  }, [current, phase, word, speakPinyin, skipAutoSpeak]);
+  }, [current, phase, word, skipAutoSpeak]);
 
   const handleSubmit = async () => {
     if (!word || busy) return;
@@ -73,31 +83,35 @@ export default function DictationPractice() {
       correct,
       mistakeType: correct ? null : 'unknown',
     };
-    setResults(prev => [...prev, result]);
+    const nextResults = [...resultsRef.current, result];
+    setResults(nextResults);
+    resultsRef.current = nextResults;
 
     if (!correct) {
       setShowAnswer(true);
+    } else if (current + 1 >= words.length) {
+      finishWithResults(nextResults);
     } else {
-      goNext();
+      setCurrent(c => c + 1);
     }
   };
 
   const goNext = () => {
     setShowAnswer(false);
     if (current + 1 >= words.length) {
-      finishPractice();
+      finishWithResults(resultsRef.current);
     } else {
       setCurrent(c => c + 1);
     }
   };
 
-  const finishPractice = async () => {
+  const finishWithResults = async (allResults) => {
     setPhase('submitting');
     const durationSec = Math.round((Date.now() - startTime.current) / 1000);
-    const allResults = [...results];
     try {
       const data = await api.submitDictation({ wordListId: parseInt(listId), results: allResults, durationSec });
       setSummary(data);
+      setResults(data.results || allResults);
       setPhase('done');
     } catch { setPhase('done'); }
   };

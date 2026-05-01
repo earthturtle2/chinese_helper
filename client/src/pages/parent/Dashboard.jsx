@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api';
-import { useAuth } from '../../context/AuthContext';
 
 export default function ParentDashboard() {
-  const { user } = useAuth();
   const [children, setChildren] = useState([]);
   const [selectedChild, setSelectedChild] = useState(null);
   const [overview, setOverview] = useState(null);
@@ -14,7 +12,10 @@ export default function ParentDashboard() {
   useEffect(() => {
     api.getChildren().then(kids => {
       setChildren(kids);
-      if (kids.length > 0) setSelectedChild(kids[0]);
+      if (kids.length > 0) {
+        setSelectedChild(kids[0]);
+        setDailyLimit(kids[0].daily_limit || 40);
+      }
     }).catch(console.error);
   }, []);
 
@@ -22,8 +23,12 @@ export default function ParentDashboard() {
     if (!selectedChild) return;
     api.getChildOverview(selectedChild.id).then(setOverview).catch(console.error);
     api.getChildMistakes(selectedChild.id).then(setMistakes).catch(console.error);
-    setDailyLimit(selectedChild.daily_limit || 40);
   }, [selectedChild]);
+
+  const selectChild = (child) => {
+    setSelectedChild(child);
+    setDailyLimit(child.daily_limit || 40);
+  };
 
   const handleLimitChange = async () => {
     await api.setChildDailyLimit(selectedChild.id, dailyLimit);
@@ -49,7 +54,7 @@ export default function ParentDashboard() {
             <button
               key={c.id}
               className={`tab ${selectedChild?.id === c.id ? 'active' : ''}`}
-              onClick={() => setSelectedChild(c)}
+              onClick={() => selectChild(c)}
             >
               {c.display_name} ({c.grade}年级)
             </button>
