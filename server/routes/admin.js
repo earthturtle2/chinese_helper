@@ -194,7 +194,7 @@ module.exports = function adminRoutes(db) {
   });
 
   router.put('/students/:id/reset-password', (req, res) => {
-    const raw = req.body.password;
+    const raw = req.body?.password;
     let password;
     try {
       password = cleanPassword(raw);
@@ -253,7 +253,7 @@ module.exports = function adminRoutes(db) {
   });
 
   router.put('/parents/:id/reset-password', (req, res) => {
-    const raw = req.body.password;
+    const raw = req.body?.password;
     let password;
     try {
       password = cleanPassword(raw);

@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../api';
+import PasswordResetModal from '../../components/PasswordResetModal';
 
 export default function AdminStudents() {
   const [students, setStudents] = useState([]);
   const [parents, setParents] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  const [resetTarget, setResetTarget] = useState(null);
+  const [notice, setNotice] = useState('');
   const [form, setForm] = useState({
     username: '',
     displayName: '',
@@ -28,6 +31,7 @@ export default function AdminStudents() {
   const handleCreate = async (e) => {
     e.preventDefault();
     setError('');
+    setNotice('');
     try {
       await api.createStudent(form);
       setForm({
@@ -45,20 +49,21 @@ export default function AdminStudents() {
 
   const handleDelete = async (id, name) => {
     if (!confirm(`确定删除学生 ${name} 吗？所有学习数据将被清除。`)) return;
+    setNotice('');
     await api.deleteStudent(id);
     load();
   };
 
   const handleBind = async (studentId, parentId) => {
+    setNotice('');
     await api.bindStudentParent(studentId, parentId || null);
     load();
   };
 
-  const handleResetPwd = async (id, name) => {
-    const pwd = prompt(`请输入 ${name} 的新密码：`);
-    if (!pwd) return;
-    await api.resetStudentPassword(id, pwd);
-    alert('密码已更新');
+  const handleResetPwd = async (password) => {
+    if (!resetTarget) return;
+    await api.resetStudentPassword(resetTarget.id, password);
+    setNotice(`已更新 ${resetTarget.display_name || resetTarget.username} 的密码`);
   };
 
   return (
@@ -69,6 +74,8 @@ export default function AdminStudents() {
           {showForm ? '取消' : '+ 新建学生'}
         </button>
       </div>
+
+      {notice && <div className="success-msg">{notice}</div>}
 
       {showForm && (
         <form onSubmit={handleCreate} className="form-card">
@@ -134,7 +141,7 @@ export default function AdminStudents() {
                 </select>
               </td>
               <td className="actions">
-                <button type="button" className="btn-sm" onClick={() => handleResetPwd(s.id, s.display_name)}>修改密码</button>
+                <button type="button" className="btn-sm" onClick={() => { setNotice(''); setResetTarget(s); }}>修改密码</button>
                 <button className="btn-sm btn-danger" onClick={() => handleDelete(s.id, s.display_name)}>删除</button>
               </td>
             </tr>
@@ -142,6 +149,14 @@ export default function AdminStudents() {
           {students.length === 0 && <tr><td colSpan="7" className="empty">暂无学生</td></tr>}
         </tbody>
       </table>
+
+      <PasswordResetModal
+        open={!!resetTarget}
+        title="修改学生密码"
+        accountName={resetTarget?.display_name || resetTarget?.username}
+        onClose={() => setResetTarget(null)}
+        onSubmit={handleResetPwd}
+      />
     </div>
   );
 }

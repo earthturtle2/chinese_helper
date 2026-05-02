@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../api';
+import PasswordResetModal from '../../components/PasswordResetModal';
 
 export default function AdminParents() {
   const [parents, setParents] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  const [resetTarget, setResetTarget] = useState(null);
+  const [notice, setNotice] = useState('');
   const [form, setForm] = useState({ username: '', password: '', phone: '' });
   const [error, setError] = useState('');
 
@@ -16,6 +19,7 @@ export default function AdminParents() {
   const handleCreate = async (e) => {
     e.preventDefault();
     setError('');
+    setNotice('');
     try {
       await api.createParent(form);
       setForm({ username: '', password: '', phone: '' });
@@ -26,15 +30,15 @@ export default function AdminParents() {
 
   const handleDelete = async (id, name) => {
     if (!confirm(`确定删除家长 ${name} 吗？`)) return;
+    setNotice('');
     await api.deleteParent(id);
     load();
   };
 
-  const handleResetPwd = async (id, name) => {
-    const pwd = prompt(`请输入家长 ${name} 的新密码：`);
-    if (!pwd) return;
-    await api.resetParentPassword(id, pwd);
-    alert('密码已更新');
+  const handleResetPwd = async (password) => {
+    if (!resetTarget) return;
+    await api.resetParentPassword(resetTarget.id, password);
+    setNotice(`已更新 ${resetTarget.username} 的密码`);
   };
 
   return (
@@ -45,6 +49,8 @@ export default function AdminParents() {
           {showForm ? '取消' : '+ 新建家长'}
         </button>
       </div>
+
+      {notice && <div className="success-msg">{notice}</div>}
 
       {showForm && (
         <form onSubmit={handleCreate} className="form-card">
@@ -70,7 +76,7 @@ export default function AdminParents() {
               <td>{p.children_names || '未绑定'}</td>
               <td>{p.created_at?.slice(0, 10)}</td>
               <td className="actions">
-                <button type="button" className="btn-sm" onClick={() => handleResetPwd(p.id, p.username)}>修改密码</button>
+                <button type="button" className="btn-sm" onClick={() => { setNotice(''); setResetTarget(p); }}>修改密码</button>
                 <button type="button" className="btn-sm btn-danger" onClick={() => handleDelete(p.id, p.username)}>删除</button>
               </td>
             </tr>
@@ -78,6 +84,14 @@ export default function AdminParents() {
           {parents.length === 0 && <tr><td colSpan="5" className="empty">暂无家长</td></tr>}
         </tbody>
       </table>
+
+      <PasswordResetModal
+        open={!!resetTarget}
+        title="修改家长密码"
+        accountName={resetTarget?.username}
+        onClose={() => setResetTarget(null)}
+        onSubmit={handleResetPwd}
+      />
     </div>
   );
 }

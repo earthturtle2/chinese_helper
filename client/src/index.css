@@ -383,6 +383,12 @@ button.login-gear-btn { appearance: none; }
   color: var(--primary);
   text-align: center;
 }
+.modal-hint {
+  margin: -8px 0 16px;
+  color: var(--text-light);
+  text-align: center;
+  font-size: 14px;
+}
 .modal-actions {
   display: flex;
   justify-content: flex-end;
