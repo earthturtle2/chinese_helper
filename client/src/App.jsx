@@ -1,7 +1,8 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './context/useAuth';
 import Layout from './components/Layout';
+import AppErrorBoundary from './components/AppErrorBoundary';
 
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
@@ -75,87 +76,90 @@ function ParentLayout() {
 
 export default function App() {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) return <div className="loading">加载中...</div>;
 
   return (
-    <Suspense fallback={<div className="loading">加载中...</div>}>
-      <Routes>
-        <Route path="/login" element={user ? <Navigate to={getHomePath(user.role)} replace /> : <Login />} />
-        <Route path="/admin/login" element={<Navigate to={user?.role === 'admin' ? '/admin' : '/login?admin=1'} replace />} />
-        <Route path="/register" element={user ? <Navigate to={getHomePath(user.role)} replace /> : <Register />} />
+    <AppErrorBoundary key={location.pathname}>
+      <Suspense fallback={<div className="loading">加载中...</div>}>
+        <Routes>
+          <Route path="/login" element={user ? <Navigate to={getHomePath(user.role)} replace /> : <Login />} />
+          <Route path="/admin/login" element={<Navigate to={user?.role === 'admin' ? '/admin' : '/login?admin=1'} replace />} />
+          <Route path="/register" element={user ? <Navigate to={getHomePath(user.role)} replace /> : <Register />} />
 
-      <Route path="/admin" element={<AdminLayout />}>
-        <Route index element={<AdminDashboard />} />
-      </Route>
-      <Route path="/admin/students" element={<AdminLayout />}>
-        <Route index element={<AdminStudents />} />
-      </Route>
-      <Route path="/admin/parents" element={<AdminLayout />}>
-        <Route index element={<AdminParents />} />
-      </Route>
-      <Route path="/admin/content" element={<AdminLayout />}>
-        <Route index element={<AdminContent />} />
-      </Route>
-      <Route path="/admin/invitations" element={<AdminLayout />}>
-        <Route index element={<AdminInvitations />} />
-      </Route>
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminDashboard />} />
+          </Route>
+          <Route path="/admin/students" element={<AdminLayout />}>
+            <Route index element={<AdminStudents />} />
+          </Route>
+          <Route path="/admin/parents" element={<AdminLayout />}>
+            <Route index element={<AdminParents />} />
+          </Route>
+          <Route path="/admin/content" element={<AdminLayout />}>
+            <Route index element={<AdminContent />} />
+          </Route>
+          <Route path="/admin/invitations" element={<AdminLayout />}>
+            <Route index element={<AdminInvitations />} />
+          </Route>
 
-      <Route path="/student" element={<StudentLayout />}>
-        <Route index element={<StudentHome />} />
-      </Route>
-      <Route path="/student/dictation" element={<StudentLayout />}>
-        <Route index element={<Dictation />} />
-      </Route>
-      <Route path="/student/dictation/:listId" element={<StudentLayout />}>
-        <Route index element={<DictationPractice />} />
-      </Route>
-      <Route path="/student/mistakes" element={<StudentLayout />}>
-        <Route index element={<MistakeBook />} />
-      </Route>
-      <Route path="/student/recitation" element={<StudentLayout />}>
-        <Route index element={<Recitation />} />
-      </Route>
-      <Route path="/student/recitation/:textId" element={<StudentLayout />}>
-        <Route index element={<RecitationPractice />} />
-      </Route>
-      <Route path="/student/lesson-study" element={<StudentLayout />}>
-        <Route index element={<LessonStudy />} />
-      </Route>
-      <Route path="/student/lesson-study/:textId" element={<StudentLayout />}>
-        <Route index element={<LessonStudyDetail />} />
-      </Route>
-      <Route path="/student/lesson-study/:textId/dictation" element={<StudentLayout />}>
-        <Route index element={<LessonDictationPractice />} />
-      </Route>
-      <Route path="/student/writing" element={<StudentLayout />}>
-        <Route index element={<Writing />} />
-      </Route>
-      <Route path="/student/writing/:sessionId" element={<StudentLayout />}>
-        <Route index element={<WritingSession />} />
-      </Route>
+          <Route path="/student" element={<StudentLayout />}>
+            <Route index element={<StudentHome />} />
+          </Route>
+          <Route path="/student/dictation" element={<StudentLayout />}>
+            <Route index element={<Dictation />} />
+          </Route>
+          <Route path="/student/dictation/:listId" element={<StudentLayout />}>
+            <Route index element={<DictationPractice />} />
+          </Route>
+          <Route path="/student/mistakes" element={<StudentLayout />}>
+            <Route index element={<MistakeBook />} />
+          </Route>
+          <Route path="/student/recitation" element={<StudentLayout />}>
+            <Route index element={<Recitation />} />
+          </Route>
+          <Route path="/student/recitation/:textId" element={<StudentLayout />}>
+            <Route index element={<RecitationPractice />} />
+          </Route>
+          <Route path="/student/lesson-study" element={<StudentLayout />}>
+            <Route index element={<LessonStudy />} />
+          </Route>
+          <Route path="/student/lesson-study/:textId" element={<StudentLayout />}>
+            <Route index element={<LessonStudyDetail />} />
+          </Route>
+          <Route path="/student/lesson-study/:textId/dictation" element={<StudentLayout />}>
+            <Route index element={<LessonDictationPractice />} />
+          </Route>
+          <Route path="/student/writing" element={<StudentLayout />}>
+            <Route index element={<Writing />} />
+          </Route>
+          <Route path="/student/writing/:sessionId" element={<StudentLayout />}>
+            <Route index element={<WritingSession />} />
+          </Route>
 
-      <Route path="/parent" element={<ParentLayout />}>
-        <Route index element={<ParentDashboard />} />
-      </Route>
-      <Route path="/parent/weekly/:studentId" element={<ParentLayout />}>
-        <Route index element={<ParentWeekly />} />
-      </Route>
-      <Route path="/parent/children/:studentId/lesson-study" element={<ParentLayout />}>
-        <Route index element={<ParentLessonStudy />} />
-      </Route>
-      <Route path="/parent/children/:studentId/lesson-study/:textId" element={<ParentLayout />}>
-        <Route index element={<LessonStudyDetail />} />
-      </Route>
-      <Route path="/parent/children/:studentId/recitation" element={<ParentLayout />}>
-        <Route index element={<ParentRecitation />} />
-      </Route>
-      <Route path="/parent/children/:studentId/recitation/:textId" element={<ParentLayout />}>
-        <Route index element={<RecitationPractice />} />
-      </Route>
+          <Route path="/parent" element={<ParentLayout />}>
+            <Route index element={<ParentDashboard />} />
+          </Route>
+          <Route path="/parent/weekly/:studentId" element={<ParentLayout />}>
+            <Route index element={<ParentWeekly />} />
+          </Route>
+          <Route path="/parent/children/:studentId/lesson-study" element={<ParentLayout />}>
+            <Route index element={<ParentLessonStudy />} />
+          </Route>
+          <Route path="/parent/children/:studentId/lesson-study/:textId" element={<ParentLayout />}>
+            <Route index element={<LessonStudyDetail />} />
+          </Route>
+          <Route path="/parent/children/:studentId/recitation" element={<ParentLayout />}>
+            <Route index element={<ParentRecitation />} />
+          </Route>
+          <Route path="/parent/children/:studentId/recitation/:textId" element={<ParentLayout />}>
+            <Route index element={<RecitationPractice />} />
+          </Route>
 
-        <Route path="*" element={<Navigate to={user ? getHomePath(user.role) : '/login'} replace />} />
-      </Routes>
-    </Suspense>
+          <Route path="*" element={<Navigate to={user ? getHomePath(user.role) : '/login'} replace />} />
+        </Routes>
+      </Suspense>
+    </AppErrorBoundary>
   );
 }

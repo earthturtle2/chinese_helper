@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { recognizeMultiCellInk } from '../utils/handwritingRecognition';
+import { detectBackend, recognizeMultiCellInk } from '../utils/handwritingRecognition';
 
 const INK_COLOR = '#1a1a1a';
 const GRID_COLOR = '#b8c5b0';
@@ -50,7 +50,7 @@ function beginInkStroke(ctx, x, y, lineWidth) {
 }
 
 /**
- * 田字格 + 笔迹层；本地 ONNX CRNN 识别，无键盘输入（DESIGN.md 手写识别闭环）。
+ * 田字格 + 笔迹层；本地 ONNX 手写识别，无键盘输入（DESIGN.md 手写识别闭环）。
  */
 const TianZiGeHandwriting = forwardRef(function TianZiGeHandwriting({ charCount, disabled }, ref) {
   const count = Math.max(1, Math.min(charCount || 1, 12));
@@ -61,6 +61,7 @@ const TianZiGeHandwriting = forwardRef(function TianZiGeHandwriting({ charCount,
   const [cellSize, setCellSize] = useState(computeCellSize);
   const [status, setStatus] = useState('');
   const [modelError, setModelError] = useState(null);
+  const [modelLabel, setModelLabel] = useState('');
 
   const redrawGrids = useCallback(() => {
     const sz = cellSize;
@@ -98,6 +99,25 @@ const TianZiGeHandwriting = forwardRef(function TianZiGeHandwriting({ charCount,
     redrawGrids();
     resetInkLayers();
   }, [count, cellSize, redrawGrids, resetInkLayers]);
+
+  useEffect(() => {
+    let cancelled = false;
+    detectBackend()
+      .then((backend) => {
+        if (cancelled) return;
+        setModelLabel(
+          backend === 'hwdb'
+            ? 'HWDB · hwdb-classifier.onnx'
+            : 'CRNN · crnn_lite_lstm.onnx'
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setModelLabel('CRNN · crnn_lite_lstm.onnx');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const getLocalCoords = (canvas, e) => {
     const r = canvas.getBoundingClientRect();
@@ -211,6 +231,7 @@ const TianZiGeHandwriting = forwardRef(function TianZiGeHandwriting({ charCount,
       <p className="hint-text tianzige-hint">
         在田字格内书写后点击「确认」，系统将本地识别手写（无需键盘）。首次加载模型约数秒。
       </p>
+      {modelLabel && <p className="hint-text tianzige-model-hint">识别模型：{modelLabel}</p>}
     </div>
   );
 });

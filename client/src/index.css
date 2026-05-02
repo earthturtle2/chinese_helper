@@ -473,6 +473,30 @@ button.login-gear-btn { appearance: none; }
   font-weight: 600;
 }
 
+.app-error-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.app-error-card {
+  max-width: 420px;
+  width: 100%;
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 28px;
+  text-align: center;
+}
+.app-error-card h2 { margin-bottom: 12px; color: var(--danger); }
+.app-error-card p { margin-bottom: 16px; color: var(--text-light); }
+.app-error-detail {
+  margin: 16px 0 0;
+  word-break: break-word;
+}
+
 /* Form cards */
 .form-card {
   background: var(--bg-card);
@@ -802,6 +826,13 @@ button.login-gear-btn { appearance: none; }
 .tianzige-toolbar { display: flex; justify-content: center; align-items: center; gap: 12px; flex-wrap: wrap; }
 .tianzige-clear { font-weight: 600; }
 .tianzige-hint { font-size: 14px; margin: 4px 0 10px; line-height: 1.5; }
+.tianzige-model-hint {
+  font-size: 12px;
+  line-height: 1.4;
+  margin: -4px 0 0;
+  opacity: 0.55;
+  text-align: right;
+}
 
 .answer-reveal { margin-top: 24px; }
 .correct-word {
