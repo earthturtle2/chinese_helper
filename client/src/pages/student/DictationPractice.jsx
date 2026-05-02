@@ -77,7 +77,7 @@ export default function DictationPractice() {
     }
     setBusy(false);
     if (!recognition?.text?.trim()) return;
-    const result = buildDictationRecognitionResult(word, recognition);
+    const result = buildDictationRecognitionResult(word, recognition, words.map((w) => w.word));
     setPendingResult(result);
   };
 
@@ -113,8 +113,15 @@ export default function DictationPractice() {
   const finishWithResults = async (allResults) => {
     setPhase('submitting');
     const durationSec = Math.round((Date.now() - startTime.current) / 1000);
+    const submitResults = allResults.map(({ word, pinyin, input, correct, mistakeType }) => ({
+      word,
+      pinyin,
+      input,
+      correct,
+      mistakeType,
+    }));
     try {
-      const data = await api.submitDictation({ wordListId: parseInt(listId), results: allResults, durationSec });
+      const data = await api.submitDictation({ wordListId: parseInt(listId), results: submitResults, durationSec });
       setSummary(data);
       setResults(data.results || allResults);
       setPhase('done');

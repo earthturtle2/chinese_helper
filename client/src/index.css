@@ -887,6 +887,44 @@ button.login-gear-btn { appearance: none; }
   color: var(--text-light);
   font-size: 12px;
 }
+.recognition-suggestion-card {
+  margin-top: 12px;
+  border: 1px solid rgba(76, 175, 80, 0.35);
+  border-radius: var(--radius-sm);
+  background: var(--primary-light);
+  padding: 12px;
+  text-align: center;
+}
+.recognition-suggestion-card span,
+.recognition-word-candidates span {
+  display: block;
+  color: var(--text-light);
+  font-size: 12px;
+  font-weight: 700;
+}
+.recognition-suggestion-card strong {
+  display: block;
+  color: var(--primary);
+  font-size: clamp(34px, 10vw, 52px);
+  line-height: 1.1;
+  margin: 2px 0;
+}
+.recognition-suggestion-card small {
+  color: var(--text-light);
+  font-size: 12px;
+}
+.recognition-word-candidates {
+  margin-top: 8px;
+  color: var(--text-light);
+  font-size: 12px;
+  text-align: center;
+}
+.recognition-word-candidates em {
+  display: block;
+  font-style: normal;
+  margin-top: 2px;
+  word-break: break-all;
+}
 .recognition-candidates {
   display: flex;
   flex-direction: column;
