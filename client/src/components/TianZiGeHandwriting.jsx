@@ -1,16 +1,17 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { detectBackend, recognizeMultiCellInk } from '../utils/handwritingRecognition';
+import { detectBackend, recognizeMultiCellInkDetailed } from '../utils/handwritingRecognition';
 
 const INK_COLOR = '#1a1a1a';
 const GRID_COLOR = '#b8c5b0';
 
-function computeCellSize() {
+function computeCellSize(count = 1) {
   if (typeof window === 'undefined') return 120;
   const w = window.innerWidth;
-  if (w <= 400) return 144;
-  if (w <= 768) return 132;
-  if (w <= 1024) return 126;
-  return 120;
+  const columns = w <= 768 ? Math.min(count, 2) : Math.min(count, 4);
+  const available = Math.max(260, w - 56);
+  const maxFit = Math.floor((available - 12 * Math.max(0, columns - 1)) / columns);
+  const desired = w <= 400 ? 158 : w <= 768 ? 168 : w <= 1024 ? 140 : 124;
+  return Math.max(116, Math.min(desired, maxFit));
 }
 
 function setupHiDpiCanvas(canvas, logicalSize) {
@@ -76,7 +77,7 @@ const TianZiGeHandwriting = forwardRef(function TianZiGeHandwriting({ charCount,
   const inkRefs = useRef([]);
   const inkCtxRefs = useRef([]);
   const drawingRef = useRef(false);
-  const [cellSize, setCellSize] = useState(computeCellSize);
+  const [cellSize, setCellSize] = useState(() => computeCellSize(count));
   const [status, setStatus] = useState('');
   const [modelError, setModelError] = useState(null);
   const [modelLabel, setModelLabel] = useState('');
@@ -116,12 +117,12 @@ const TianZiGeHandwriting = forwardRef(function TianZiGeHandwriting({ charCount,
 
   useEffect(() => {
     const onResize = () => setCellSize((current) => {
-      const next = computeCellSize();
+      const next = computeCellSize(count);
       return current === next ? current : next;
     });
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, []);
+  }, [count]);
 
   useEffect(() => {
     redrawGrids();
@@ -166,7 +167,7 @@ const TianZiGeHandwriting = forwardRef(function TianZiGeHandwriting({ charCount,
       inkCtxRefs.current[idx] = ctx;
     }
     const { x, y } = getLocalCoords(canvas, e);
-    const lineWidth = Math.max(4, cellSize * 0.05);
+    const lineWidth = Math.max(3.5, Math.min(6, cellSize * 0.038));
     drawingRef.current = true;
     drawInkDot(ctx, x, y, lineWidth);
     beginInkStroke(ctx, x, y, lineWidth);
@@ -201,25 +202,31 @@ const TianZiGeHandwriting = forwardRef(function TianZiGeHandwriting({ charCount,
     setModelError(null);
   }, [resetInkLayers]);
 
-  const recognize = async () => {
+  const recognizeDetailed = async () => {
     setModelError(null);
     setStatus('识别中…');
     try {
       const canvases = inkRefs.current.slice(0, count);
-      const text = await recognizeMultiCellInk(canvases);
-      setStatus(text ? `识别结果：${text}` : '未识别到字迹，请重写');
-      return text;
+      const detail = await recognizeMultiCellInkDetailed(canvases, { topK: 5, includePreview: true });
+      setStatus(detail.text ? `识别结果：${detail.text}` : '未识别到字迹，请重写');
+      return detail;
     } catch (e) {
       console.error(e);
       const msg = e?.message || '识别失败';
       setModelError(msg);
       setStatus('');
-      return '';
+      return { text: '', backend: null, chars: [] };
     }
+  };
+
+  const recognize = async () => {
+    const detail = await recognizeDetailed();
+    return detail.text || '';
   };
 
   useImperativeHandle(ref, () => ({
     recognize,
+    recognizeDetailed,
     clear: clearAll,
   }));
 

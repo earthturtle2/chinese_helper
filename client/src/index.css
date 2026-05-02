@@ -843,6 +843,7 @@ button.login-gear-btn { appearance: none; }
   padding: 16px;
 }
 .recognition-review.correct { border-color: rgba(76, 175, 80, 0.45); }
+.recognition-review.uncertain { border-color: rgba(255, 152, 0, 0.42); }
 .recognition-review.wrong { border-color: rgba(229, 57, 53, 0.35); }
 .recognition-review-status {
   color: var(--text);
@@ -886,6 +887,57 @@ button.login-gear-btn { appearance: none; }
   color: var(--text-light);
   font-size: 12px;
 }
+.recognition-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(224, 224, 224, 0.25);
+}
+.recognition-candidate-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--text-light);
+  font-size: 12px;
+}
+.recognition-candidate-row span {
+  color: var(--text);
+  font-weight: 800;
+}
+.recognition-candidate-row em {
+  font-style: normal;
+  word-break: break-all;
+}
+.recognition-debug {
+  margin-top: 10px;
+  color: var(--text-light);
+  font-size: 12px;
+  text-align: center;
+}
+.recognition-debug summary {
+  cursor: pointer;
+  user-select: none;
+}
+.recognition-debug-images {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.recognition-debug-images figure { margin: 0; }
+.recognition-debug-images img {
+  width: 64px;
+  height: 64px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: white;
+  image-rendering: pixelated;
+}
+.recognition-debug-images figcaption { font-size: 11px; }
 .recognition-review-hint {
   font-size: 13px;
   margin: 12px 0 0;

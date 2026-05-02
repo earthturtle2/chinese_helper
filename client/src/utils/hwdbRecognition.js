@@ -6,6 +6,7 @@
 const ORT_VERSION = '1.24.3';
 
 const IMG_SIZE = 64;
+const TOP_K = 5;
 
 let labels = null;
 let labelsPromise = null;
@@ -105,16 +106,28 @@ function getInkBoundingBox(rgbCanvas) {
 
 // ─── 预处理 ─────────────────────────────────────────────────────────────────────
 
+function makeTensorFromCanvas(ort, canvas) {
+  const imgData = canvas.getContext('2d').getImageData(0, 0, IMG_SIZE, IMG_SIZE);
+  const px = imgData.data;
+  const hw = IMG_SIZE * IMG_SIZE;
+  const data = new Float32Array(hw);
+  for (let i = 0; i < hw; i++) {
+    const gray = px[i * 4] * 0.299 + px[i * 4 + 1] * 0.587 + px[i * 4 + 2] * 0.114;
+    data[i] = (gray / 255.0 - 0.5) / 0.5;
+  }
+  return new ort.Tensor('float32', data, [1, 1, IMG_SIZE, IMG_SIZE]);
+}
+
 /**
- * 将田字格笔迹裁剪→等比缩放→居中填入 64×64 灰度画布，
- * 归一化到 [-1, 1]，返回 [1, 1, 64, 64] Float32 tensor。
+ * 将田字格笔迹裁剪→等比缩放→居中填入 64×64 灰度画布。
+ * 留白比旧版更大，避免“赏/常”这类复杂字被压得过满而丢下部细节。
  */
-function preprocessInkCanvas(ort, inkCanvas) {
+function renderModelInputCanvas(inkCanvas) {
   const rgb = compositeWhiteBackground(inkCanvas);
   const bbox = getInkBoundingBox(rgb);
   if (!bbox) return null;
 
-  const padding = 8;
+  const padding = Math.max(10, Math.round(Math.max(rgb.width, rgb.height) * 0.08));
   const sx = Math.max(0, bbox.x - padding);
   const sy = Math.max(0, bbox.y - padding);
   const sr = Math.min(rgb.width, bbox.x + bbox.w + padding);
@@ -129,7 +142,7 @@ function preprocessInkCanvas(ort, inkCanvas) {
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, IMG_SIZE, IMG_SIZE);
 
-  const scale = (IMG_SIZE - 4) / Math.max(cw, ch);
+  const scale = (IMG_SIZE - 10) / Math.max(cw, ch);
   const dw = Math.round(cw * scale);
   const dh = Math.round(ch * scale);
   const dx = Math.round((IMG_SIZE - dw) / 2);
@@ -138,15 +151,43 @@ function preprocessInkCanvas(ort, inkCanvas) {
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(rgb, sx, sy, cw, ch, dx, dy, dw, dh);
 
-  const imgData = ctx.getImageData(0, 0, IMG_SIZE, IMG_SIZE);
-  const px = imgData.data;
-  const hw = IMG_SIZE * IMG_SIZE;
-  const data = new Float32Array(hw);
-  for (let i = 0; i < hw; i++) {
-    const gray = px[i * 4] * 0.299 + px[i * 4 + 1] * 0.587 + px[i * 4 + 2] * 0.114;
-    data[i] = (gray / 255.0 - 0.5) / 0.5;
+  return out;
+}
+
+function preprocessInkCanvas(ort, inkCanvas, { includePreview = false } = {}) {
+  const canvas = renderModelInputCanvas(inkCanvas);
+  if (!canvas) return null;
+  return {
+    tensor: makeTensorFromCanvas(ort, canvas),
+    preview: includePreview ? canvas.toDataURL('image/png') : null,
+  };
+}
+
+function buildCandidates(logits, chars, topK = TOP_K) {
+  const limit = Math.min(topK, logits.length);
+  const top = [];
+  let maxLogit = -Infinity;
+  for (let i = 0; i < logits.length; i++) {
+    if (logits[i] > maxLogit) maxLogit = logits[i];
+    if (top.length < limit) {
+      top.push(i);
+      top.sort((a, b) => logits[b] - logits[a]);
+    } else if (logits[i] > logits[top[top.length - 1]]) {
+      top[top.length - 1] = i;
+      top.sort((a, b) => logits[b] - logits[a]);
+    }
   }
-  return new ort.Tensor('float32', data, [1, 1, IMG_SIZE, IMG_SIZE]);
+
+  let sum = 0;
+  for (let i = 0; i < logits.length; i++) {
+    sum += Math.exp(logits[i] - maxLogit);
+  }
+
+  return top.map((idx) => ({
+    char: chars[idx] || '',
+    score: logits[idx],
+    probability: sum > 0 ? Math.exp(logits[idx] - maxLogit) / sum : 0,
+  }));
 }
 
 // ─── 推理 ───────────────────────────────────────────────────────────────────────
@@ -156,40 +197,59 @@ function preprocessInkCanvas(ort, inkCanvas) {
  * 无墨迹时返回空字符串。
  */
 export async function recognizeSingleChar(inkCanvas) {
+  const detail = await recognizeSingleCharDetailed(inkCanvas);
+  return detail.text;
+}
+
+export async function recognizeSingleCharDetailed(inkCanvas, options = {}) {
   await loadLabels();
   const ort = await getOrt();
   const session = await getSession();
 
-  const inputTensor = preprocessInkCanvas(ort, inkCanvas);
-  if (!inputTensor) return '';
+  const prepared = preprocessInkCanvas(ort, inkCanvas, options);
+  if (!prepared) {
+    return { text: '', candidates: [], modelInputPreview: null };
+  }
 
-  const results = await session.run({ input: inputTensor });
-  const out = results.output;
+  const results = await session.run({ input: prepared.tensor });
+  const out = results.output || results[session.outputNames?.[0]] || Object.values(results)[0];
   if (!out) {
     throw new Error(`HWDB 模型输出名非 output，实际: ${Object.keys(results).join(',')}`);
   }
 
   const logits = out.data;
-  let maxVal = -Infinity;
-  let maxIdx = 0;
-  for (let i = 0; i < logits.length; i++) {
-    if (logits[i] > maxVal) {
-      maxVal = logits[i];
-      maxIdx = i;
-    }
-  }
-  return labels[maxIdx] || '';
+  const candidates = buildCandidates(logits, labels, options.topK || TOP_K);
+  return {
+    text: candidates[0]?.char || '',
+    candidates,
+    modelInputPreview: prepared.preview,
+  };
 }
 
 /**
  * 对多个田字格笔迹画布逐个识别，返回拼接后的字符串。
  */
 export async function recognizeMultiCellInk(inkCanvases) {
+  const detail = await recognizeMultiCellInkDetailed(inkCanvases);
+  return detail.text;
+}
+
+export async function recognizeMultiCellInkDetailed(inkCanvases, options = {}) {
   const parts = [];
+  const chars = [];
   for (const ink of inkCanvases) {
-    if (!ink) { parts.push(''); continue; }
-    const ch = await recognizeSingleChar(ink);
-    parts.push(ch);
+    if (!ink) {
+      chars.push({ text: '', candidates: [], modelInputPreview: null });
+      parts.push('');
+      continue;
+    }
+    const detail = await recognizeSingleCharDetailed(ink, options);
+    chars.push(detail);
+    parts.push(detail.text);
   }
-  return parts.join('');
+  return {
+    backend: 'hwdb',
+    text: parts.join(''),
+    chars,
+  };
 }

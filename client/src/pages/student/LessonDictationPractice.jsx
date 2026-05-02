@@ -6,6 +6,7 @@ import DictationRecognitionReview from '../../components/DictationRecognitionRev
 import { speakChineseWord } from '../../utils/speechChinese';
 import { useTtsEngine } from '../../hooks/useTtsEngine';
 import TtsEngineBadge from '../../components/TtsEngineBadge';
+import { buildDictationRecognitionResult } from '../../utils/dictationRecognition';
 
 export default function LessonDictationPractice() {
   const { textId } = useParams();
@@ -94,24 +95,17 @@ export default function LessonDictationPractice() {
   const handleSubmit = async () => {
     if (!word || busy) return;
     setBusy(true);
-    let text = '';
+    let recognition = null;
     try {
-      text = (await hwRef.current?.recognize?.())?.trim() ?? '';
+      recognition = await hwRef.current?.recognizeDetailed?.();
     } catch (e) {
       console.error(e);
       setBusy(false);
       return;
     }
     setBusy(false);
-    if (!text) return;
-    const correct = text === word.word;
-    const result = {
-      word: word.word,
-      pinyin: word.pinyin,
-      input: text,
-      correct,
-      mistakeType: correct ? null : 'unknown',
-    };
+    if (!recognition?.text?.trim()) return;
+    const result = buildDictationRecognitionResult(word, recognition);
     setPendingResult(result);
   };
 
