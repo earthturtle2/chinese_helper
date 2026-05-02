@@ -120,14 +120,14 @@ function makeTensorFromCanvas(ort, canvas) {
 
 /**
  * 将田字格笔迹裁剪→等比缩放→居中填入 64×64 灰度画布。
- * 留白比旧版更大，避免“赏/常”这类复杂字被压得过满而丢下部细节。
+ * 只保留少量留白；过大的留白会把字整体缩小，反而丢失 64×64 内的结构细节。
  */
 function renderModelInputCanvas(inkCanvas) {
   const rgb = compositeWhiteBackground(inkCanvas);
   const bbox = getInkBoundingBox(rgb);
   if (!bbox) return null;
 
-  const padding = Math.max(10, Math.round(Math.max(rgb.width, rgb.height) * 0.08));
+  const padding = Math.max(8, Math.round(Math.max(bbox.w, bbox.h) * 0.035));
   const sx = Math.max(0, bbox.x - padding);
   const sy = Math.max(0, bbox.y - padding);
   const sr = Math.min(rgb.width, bbox.x + bbox.w + padding);
@@ -142,7 +142,7 @@ function renderModelInputCanvas(inkCanvas) {
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, IMG_SIZE, IMG_SIZE);
 
-  const scale = (IMG_SIZE - 10) / Math.max(cw, ch);
+  const scale = (IMG_SIZE - 6) / Math.max(cw, ch);
   const dw = Math.round(cw * scale);
   const dh = Math.round(ch * scale);
   const dx = Math.round((IMG_SIZE - dw) / 2);

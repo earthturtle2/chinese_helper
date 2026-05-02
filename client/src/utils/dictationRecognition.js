@@ -34,6 +34,11 @@ function getCharOptions(review) {
   if (review.recognized && !options.some((c) => c.char === review.recognized)) {
     options.push({ char: review.recognized, probability: 1e-8 });
   }
+  if (review.expected && !options.some((c) => c.char === review.expected)) {
+    // Keep the target word reachable for word-level scoring, but with a tiny prior
+    // so the lexicon cannot override a genuinely unrelated handwriting result.
+    options.push({ char: review.expected, probability: 1e-4 });
+  }
 
   return options.length > 0 ? options : [{ char: review.recognized || '', probability: 1e-8 }];
 }
