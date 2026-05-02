@@ -25,6 +25,15 @@ function setupHiDpiCanvas(canvas, logicalSize) {
   return ctx;
 }
 
+function cloneCanvas(canvas) {
+  if (!canvas?.width || !canvas?.height) return null;
+  const copy = document.createElement('canvas');
+  copy.width = canvas.width;
+  copy.height = canvas.height;
+  copy.getContext('2d').drawImage(canvas, 0, 0);
+  return copy;
+}
+
 function drawGridOnly(ctx, size) {
   ctx.clearRect(0, 0, size, size);
   ctx.fillStyle = '#fffdf8';
@@ -47,6 +56,15 @@ function beginInkStroke(ctx, x, y, lineWidth) {
   ctx.lineJoin = 'round';
   ctx.beginPath();
   ctx.moveTo(x, y);
+}
+
+function drawInkDot(ctx, x, y, lineWidth) {
+  ctx.save();
+  ctx.fillStyle = INK_COLOR;
+  ctx.beginPath();
+  ctx.arc(x, y, lineWidth / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 /**
@@ -79,25 +97,35 @@ const TianZiGeHandwriting = forwardRef(function TianZiGeHandwriting({ charCount,
     }
   }, [count, cellSize]);
 
-  const resetInkLayers = useCallback(() => {
+  const resetInkLayers = useCallback((preserveInk = false) => {
     const sz = cellSize;
+    const snapshots = preserveInk
+      ? inkRefs.current.slice(0, count).map(cloneCanvas)
+      : [];
     for (let i = 0; i < count; i++) {
       const c = inkRefs.current[i];
       if (!c) continue;
       const ctx = setupHiDpiCanvas(c, sz);
+      const snapshot = snapshots[i];
+      if (snapshot) {
+        ctx.drawImage(snapshot, 0, 0, snapshot.width, snapshot.height, 0, 0, sz, sz);
+      }
       inkCtxRefs.current[i] = ctx;
     }
   }, [count, cellSize]);
 
   useEffect(() => {
-    const onResize = () => setCellSize(computeCellSize());
+    const onResize = () => setCellSize((current) => {
+      const next = computeCellSize();
+      return current === next ? current : next;
+    });
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
   useEffect(() => {
     redrawGrids();
-    resetInkLayers();
+    resetInkLayers(true);
   }, [count, cellSize, redrawGrids, resetInkLayers]);
 
   useEffect(() => {
@@ -138,8 +166,10 @@ const TianZiGeHandwriting = forwardRef(function TianZiGeHandwriting({ charCount,
       inkCtxRefs.current[idx] = ctx;
     }
     const { x, y } = getLocalCoords(canvas, e);
+    const lineWidth = Math.max(4, cellSize * 0.05);
     drawingRef.current = true;
-    beginInkStroke(ctx, x, y, Math.max(4, cellSize * 0.05));
+    drawInkDot(ctx, x, y, lineWidth);
+    beginInkStroke(ctx, x, y, lineWidth);
   };
 
   const onPointerMove = (e, idx) => {
@@ -166,7 +196,7 @@ const TianZiGeHandwriting = forwardRef(function TianZiGeHandwriting({ charCount,
   };
 
   const clearAll = useCallback(() => {
-    resetInkLayers();
+    resetInkLayers(false);
     setStatus('');
     setModelError(null);
   }, [resetInkLayers]);

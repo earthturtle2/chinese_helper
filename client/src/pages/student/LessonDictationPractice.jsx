@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../api';
 import TianZiGeHandwriting from '../../components/TianZiGeHandwriting';
+import DictationRecognitionReview from '../../components/DictationRecognitionReview';
 import { speakChineseWord } from '../../utils/speechChinese';
 import { useTtsEngine } from '../../hooks/useTtsEngine';
 import TtsEngineBadge from '../../components/TtsEngineBadge';
@@ -13,7 +14,7 @@ export default function LessonDictationPractice() {
   const [current, setCurrent] = useState(0);
   const [results, setResults] = useState([]);
   const [phase, setPhase] = useState('loading');
-  const [showAnswer, setShowAnswer] = useState(false);
+  const [pendingResult, setPendingResult] = useState(null);
   const [summary, setSummary] = useState(null);
   const [busy, setBusy] = useState(false);
   const startTime = useRef(0);
@@ -111,26 +112,36 @@ export default function LessonDictationPractice() {
       correct,
       mistakeType: correct ? null : 'unknown',
     };
+    setPendingResult(result);
+  };
+
+  const commitResult = (result) => {
     const nextResults = [...resultsRef.current, result];
     setResults(nextResults);
     resultsRef.current = nextResults;
 
-    if (!correct) {
-      setShowAnswer(true);
-    } else if (current + 1 >= words.length) {
+    if (current + 1 >= words.length) {
       finishWithResults(nextResults);
     } else {
+      setPendingResult(null);
       setCurrent((c) => c + 1);
     }
   };
 
-  const goNext = () => {
-    setShowAnswer(false);
-    if (current + 1 >= words.length) {
-      finishWithResults(resultsRef.current);
-    } else {
-      setCurrent((c) => c + 1);
-    }
+  const retryCurrent = () => {
+    setPendingResult(null);
+    hwRef.current?.clear?.();
+  };
+
+  const acceptAsCorrect = () => {
+    if (!pendingResult) return;
+    commitResult({
+      ...pendingResult,
+      input: pendingResult.word,
+      correct: true,
+      mistakeType: null,
+      recognizedInput: pendingResult.input,
+    });
   };
 
   if (phase === 'loading') return <div className="loading">加载生词...</div>;
@@ -207,26 +218,27 @@ export default function LessonDictationPractice() {
           🔊 听读音
         </button>
 
-        {showAnswer ? (
-          <div className="answer-reveal">
-            <div className="correct-word">{word?.word}</div>
-            <p className="hint-text">正确答案是这个字哦，记住它的样子！</p>
-            <button className="btn-primary" onClick={goNext}>
-              {current + 1 >= words.length ? '查看结果' : '下一个'}
-            </button>
-          </div>
-        ) : (
-          <div className="input-area tianzige-input-area">
-            <TianZiGeHandwriting
-              key={`${textId}-${current}`}
-              ref={hwRef}
-              charCount={Math.max(1, word?.word?.length || 1)}
+        <div className="input-area tianzige-input-area">
+          <TianZiGeHandwriting
+            key={`${textId}-${current}`}
+            ref={hwRef}
+            charCount={Math.max(1, word?.word?.length || 1)}
+            disabled={busy || !!pendingResult}
+          />
+          {pendingResult ? (
+            <DictationRecognitionReview
+              result={pendingResult}
+              isLast={current + 1 >= words.length}
+              onRetry={retryCurrent}
+              onAcceptAsCorrect={acceptAsCorrect}
+              onContinue={() => commitResult(pendingResult)}
             />
+          ) : (
             <button className="btn-primary" onClick={handleSubmit} disabled={busy}>
               {busy ? '识别中…' : '确认'}
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

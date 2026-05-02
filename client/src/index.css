@@ -827,11 +827,83 @@ button.login-gear-btn { appearance: none; }
 .tianzige-clear { font-weight: 600; }
 .tianzige-hint { font-size: 14px; margin: 4px 0 10px; line-height: 1.5; }
 .tianzige-model-hint {
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.4;
-  margin: -4px 0 0;
-  opacity: 0.55;
-  text-align: right;
+  margin: 6px 0 0;
+  opacity: 0.42;
+  text-align: center;
+}
+
+.recognition-review {
+  width: 100%;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+.recognition-review.correct { border-color: rgba(76, 175, 80, 0.45); }
+.recognition-review.wrong { border-color: rgba(229, 57, 53, 0.35); }
+.recognition-review-status {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 800;
+  margin-bottom: 12px;
+  text-align: center;
+}
+.recognition-compare-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.recognition-compare-card {
+  min-height: 120px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.recognition-compare-card span {
+  color: var(--text-light);
+  font-size: 13px;
+  font-weight: 700;
+}
+.recognition-compare-card strong {
+  color: var(--text);
+  font-size: clamp(42px, 12vw, 64px);
+  font-weight: 800;
+  line-height: 1.05;
+  word-break: break-all;
+}
+.recognition-compare-card.expected strong { color: var(--primary); }
+.recognition-compare-card.recognized strong { color: var(--accent-dark); }
+.recognition-compare-card small {
+  color: var(--text-light);
+  font-size: 12px;
+}
+.recognition-review-hint {
+  font-size: 13px;
+  margin: 12px 0 0;
+  text-align: center;
+}
+.recognition-review-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+.dictation-practice .recognition-review-actions .btn-primary,
+.dictation-practice .recognition-review-actions .btn-secondary {
+  width: auto;
+  min-width: 118px;
+  margin-inline: 0;
+  padding: 10px 16px;
 }
 
 .answer-reveal { margin-top: 24px; }
