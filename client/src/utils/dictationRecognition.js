@@ -1,4 +1,12 @@
-function reviewChar(expected, recognized, detail) {
+function buildLexiconCharSet(lexiconWords) {
+  return new Set(
+    (lexiconWords || [])
+      .flatMap((word) => Array.from(String(word || '')))
+      .filter(Boolean)
+  );
+}
+
+function reviewChar(expected, recognized, detail, lexiconCharSet) {
   const candidates = Array.isArray(detail?.candidates) ? detail.candidates : [];
   const top = candidates[0] || null;
   const expectedCandidate = candidates.find((c) => c.char === expected) || null;
@@ -19,16 +27,18 @@ function reviewChar(expected, recognized, detail) {
     modelInputPreview: detail?.modelInputPreview || null,
     expectedProbability: expectedProb,
     topProbability: topProb,
+    inLexiconCharSet: lexiconCharSet?.has(expected) || false,
   };
 }
 
 function getCharOptions(review) {
   const options = (review.candidates || [])
     .filter((c) => c.char)
-    .slice(0, 5)
+    .slice(0, 30)
     .map((c) => ({
       char: c.char,
       probability: Math.max(c.probability || 0, 1e-8),
+      inLexiconCharSet: review.lexiconCharSet?.has(c.char) || false,
     }));
 
   if (review.recognized && !options.some((c) => c.char === review.recognized)) {
@@ -37,7 +47,7 @@ function getCharOptions(review) {
   if (review.expected && !options.some((c) => c.char === review.expected)) {
     // Keep the target word reachable for word-level scoring, but with a tiny prior
     // so the lexicon cannot override a genuinely unrelated handwriting result.
-    options.push({ char: review.expected, probability: 1e-4 });
+    options.push({ char: review.expected, probability: 1e-4, inLexiconCharSet: true });
   }
 
   return options.length > 0 ? options : [{ char: review.recognized || '', probability: 1e-8 }];
@@ -57,7 +67,7 @@ function inferWordWithLexicon(expected, recognized, charReviews, lexiconWords = 
       for (const option of options) {
         next.push({
           word: `${item.word}${option.char}`,
-          logProb: item.logProb + Math.log(option.probability),
+          logProb: item.logProb + Math.log(option.probability) + (option.inLexiconCharSet ? 0.5 : 0),
         });
       }
     }
@@ -91,10 +101,14 @@ export function buildDictationRecognitionResult(word, recognition, lexiconWords 
   const expectedChars = Array.from(expected);
   const recognizedChars = Array.from(recognized);
   const details = Array.isArray(recognition?.chars) ? recognition.chars : [];
+  const lexiconCharSet = buildLexiconCharSet([...lexiconWords, expected]);
 
   const charReviews = expectedChars.map((ch, i) =>
-    reviewChar(ch, recognizedChars[i] || '', details[i])
+    reviewChar(ch, recognizedChars[i] || '', details[i], lexiconCharSet)
   );
+  charReviews.forEach((review) => {
+    review.lexiconCharSet = lexiconCharSet;
+  });
   const exact = recognized === expected;
   const lexiconInference = inferWordWithLexicon(expected, recognized, charReviews, lexiconWords);
   const uncertain =

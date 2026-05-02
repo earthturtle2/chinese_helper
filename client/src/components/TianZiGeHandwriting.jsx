@@ -207,7 +207,7 @@ const TianZiGeHandwriting = forwardRef(function TianZiGeHandwriting({ charCount,
     setStatus('识别中…');
     try {
       const canvases = inkRefs.current.slice(0, count);
-      const detail = await recognizeMultiCellInkDetailed(canvases, { topK: 5, includePreview: true });
+      const detail = await recognizeMultiCellInkDetailed(canvases, { topK: 30, includePreview: true });
       setStatus(detail.text ? `识别结果：${detail.text}` : '未识别到字迹，请重写');
       return detail;
     } catch (e) {
